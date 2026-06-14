@@ -14,15 +14,8 @@ output "lambda_etl_function_arn" {
   value = aws_lambda_function.etl.arn
 }
 
-output "lambda_orchestrator_function_name" {
-  value = aws_lambda_function.orchestrator.function_name
-}
-
-output "lambda_orchestrator_function_arn" {
-  value = aws_lambda_function.orchestrator.arn
-}
 
 output "lambda_role_arn" {
-  value = aws_iam_role.lambda_role.arn
+  value = data.aws_iam_role.lab_role.arn
 }
 

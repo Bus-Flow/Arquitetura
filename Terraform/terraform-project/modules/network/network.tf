@@ -1,4 +1,4 @@
-﻿/*==== Criando a VPC ======*/
+/*==== Criando a VPC ======*/
 resource "aws_vpc" "vpc" {
   cidr_block                = "10.0.0.0/24"
   enable_dns_hostnames      = true
@@ -16,25 +16,7 @@ resource "aws_internet_gateway" "igw" {
   }
 }
 
-/*==== NAT gateway nat ====*/
-#ip elastico NAT
-resource "aws_eip" "nat-gateway-eip" {
-  vpc                       = true
-  depends_on                = [aws_internet_gateway.igw]
-  tags = {
-    Name                    = "nat-ip-elastico-busflow"
-  }
-}
 
-#NAT Gateway
-resource "aws_nat_gateway" "nat" {
-  allocation_id             = aws_eip.nat-gateway-eip.id
-  subnet_id                 = aws_subnet.public_subnet[0].id
-  depends_on                = [aws_internet_gateway.igw]
-  tags = {
-    Name                    = "nat-busflow"
-  }
-}
 
 /*==== sub-redes públicas ====*/
 resource "aws_subnet" "public_subnet" {
@@ -79,10 +61,6 @@ resource "aws_route_table_association" "public" {
 /*==== tabela de rota privada ====*/
 resource "aws_route_table" "private_rt" {
     vpc_id                  = aws_vpc.vpc.id
-    route {
-      cidr_block            = "0.0.0.0/0"
-      nat_gateway_id        = aws_nat_gateway.nat.id
-    }
     tags = {
         Name                = "rt-private-busflow"
     }
@@ -286,8 +264,16 @@ output "subnet_public_id" {
 output "subnet_private_id" {
     value = aws_subnet.private_subnet[0].id
 }
-output "nat_id" {
-    value = aws_nat_gateway.nat.id
+/*==== Gateway Endpoint para S3 ======*/
+resource "aws_vpc_endpoint" "s3_gateway" {
+  vpc_id            = aws_vpc.vpc.id
+  service_name      = "com.amazonaws.us-east-1.s3"
+  vpc_endpoint_type = "Gateway"
+  route_table_ids   = [aws_route_table.private_rt.id]
+
+  tags = {
+    Name = "s3-gateway-endpoint-busflow"
+  }
 }
 output "vpc_id" {
     value = aws_vpc.vpc.id

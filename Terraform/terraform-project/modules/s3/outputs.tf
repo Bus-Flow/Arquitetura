@@ -17,13 +17,3 @@ output "trusted_arn" {
 output "trusted_id" {
     value = aws_s3_bucket.trusted.id
 }
-
-output "prediction_name" {
-    value = aws_s3_bucket.prediction.bucket
-}
-output "prediction_arn" {
-    value = aws_s3_bucket.prediction.arn
-}
-output "prediction_id" {
-    value = aws_s3_bucket.prediction.id
-}

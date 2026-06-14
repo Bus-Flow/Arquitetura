@@ -15,10 +15,6 @@ def lambda_handler(event, context):
     """
     try:
         bucket_raw = os.environ['BUCKET_RAW']
-        rds_host = os.environ['RDS_HOST']
-        rds_user = os.environ['RDS_USER']
-        rds_password = os.environ['RDS_PASSWORD']
-        rds_database = os.environ['RDS_DATABASE']
         topic_arn = os.environ['SNS_TOPIC_ARN']
         
         # Example: Collect data from APIs

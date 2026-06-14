@@ -1,21 +1,16 @@
 output "rds_endpoint" {
-  description = "RDS Cluster endpoint"
-  value       = aws_rds_cluster.db_cluster.endpoint
-}
-
-output "rds_reader_endpoint" {
-  description = "RDS Cluster reader endpoint"
-  value       = aws_rds_cluster.db_cluster.reader_endpoint
+  description = "RDS DB instance address"
+  value       = aws_db_instance.db_instance.address
 }
 
 output "rds_port" {
   description = "RDS port"
-  value       = aws_rds_cluster.db_cluster.port
+  value       = aws_db_instance.db_instance.port
 }
 
 output "rds_database_name" {
   description = "RDS database name"
-  value       = aws_rds_cluster.db_cluster.database_name
+  value       = aws_db_instance.db_instance.db_name
 }
 
 output "rds_sg_id" {

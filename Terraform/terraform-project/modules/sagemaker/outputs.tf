@@ -1,16 +1,16 @@
 output "notebook_instance_arn" {
   description = "ARN da instância do notebook SageMaker"
-  value       = aws_sagemaker_notebook_instance.ml_notebook_with_config.arn
+  value       = aws_sagemaker_notebook_instance.ml_notebook.arn
 }
 
 output "notebook_instance_name" {
   description = "Nome da instância do notebook SageMaker"
-  value       = aws_sagemaker_notebook_instance.ml_notebook_with_config.notebook_instance_name
+  value       = aws_sagemaker_notebook_instance.ml_notebook.name
 }
 
 output "sagemaker_role_arn" {
   description = "ARN da IAM role para SageMaker"
-  value       = aws_iam_role.sagemaker_role.arn
+  value       = data.aws_iam_role.lab_role.arn
 }
 
 output "sagemaker_sg_id" {

@@ -1,4 +1,4 @@
-﻿variable "vpc_id" {
+variable "vpc_id" {
   description = "VPC ID"
   type        = string
 }
@@ -21,13 +21,13 @@ variable "ec2_sg_id" {
 variable "instance_class" {
   description = "Classe da instância RDS"
   type        = string
-  default     = "db.t3.small"
+  default     = "db.t3.micro"
 }
 
 variable "engine_version" {
-  description = "Versão do MySQL Aurora"
+  description = "Versão do PostgreSQL"
   type        = string
-  default     = "5.7.mysql_aurora.2.11.2"
+  default     = "14"
 }
 
 variable "database_name" {
@@ -39,7 +39,7 @@ variable "database_name" {
 variable "master_username" {
   description = "Usuário master do banco"
   type        = string
-  default     = "admin"
+  default     = "postgres"
   sensitive   = true
 }
 
@@ -53,5 +53,10 @@ variable "backup_retention_period" {
   description = "Dias de retenção de backups"
   type        = number
   default     = 7
+}
+
+variable "sagemaker_sg_id" {
+  description = "Security Group ID do SageMaker"
+  type        = string
 }
 

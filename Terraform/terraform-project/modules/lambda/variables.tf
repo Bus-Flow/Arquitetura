@@ -18,10 +18,7 @@ variable "trusted_arn" {
   type        = string
 }
 
-variable "prediction_arn" {
-  description = "ARN do bucket Prediction"
-  type        = string
-}
+
 
 variable "topic_arn" {
   description = "ARN do tópico SNS"
@@ -33,27 +30,7 @@ variable "email_list" {
   type        = list(string)
 }
 
-variable "rds_endpoint" {
-  description = "Endpoint do RDS"
-  type        = string
-}
 
-variable "rds_username" {
-  description = "Username do RDS"
-  type        = string
-  sensitive   = true
-}
-
-variable "rds_password" {
-  description = "Password do RDS"
-  type        = string
-  sensitive   = true
-}
-
-variable "rds_database" {
-  description = "Database name do RDS"
-  type        = string
-}
 
 variable "lambda_sg_id" {
   description = "Security Group ID para Lambda"

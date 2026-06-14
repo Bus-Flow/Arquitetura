@@ -19,10 +19,7 @@ variable "trusted_bucket_arn" {
   type        = string
 }
 
-variable "prediction_bucket_arn" {
-  description = "ARN do bucket Prediction"
-  type        = string
-}
+
 
 variable "notebook_instance_type" {
   description = "Tipo de instância do notebook SageMaker"
