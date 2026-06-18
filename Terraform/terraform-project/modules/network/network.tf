@@ -165,21 +165,29 @@ resource "aws_network_acl" "acl_privada" {
     to_port                 = 0
   }
   ingress {
-  protocol    = "tcp"
-  rule_no     = 250
-  action      = "allow"
-  cidr_block  = "10.0.0.0/24" # ou o bloco da subnet pública
-  from_port   = 3306
-  to_port     = 3306
-}
-egress {
-  protocol    = "tcp"
-  rule_no     = 250
-  action      = "allow"
-  cidr_block  = "10.0.0.0/24"
-  from_port   = 3306
-  to_port     = 3306
-}
+    protocol    = "tcp"
+    rule_no     = 250
+    action      = "allow"
+    cidr_block  = "10.0.0.0/24" # ou o bloco da subnet pública
+    from_port   = 3306
+    to_port     = 3306
+  }
+  ingress {
+    protocol    = "tcp"
+    rule_no     = 260
+    action      = "allow"
+    cidr_block  = "10.0.0.0/24"
+    from_port   = 5432
+    to_port     = 5432
+  }
+  egress {
+    protocol    = "tcp"
+    rule_no     = 250
+    action      = "allow"
+    cidr_block  = "10.0.0.0/24"
+    from_port   = 3306
+    to_port     = 3306
+  }
   tags = {
     Name                    = "acl_privada"
   }
