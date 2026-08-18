@@ -1,4 +1,40 @@
+# ==========================================
+# Terraform & Security
+# ==========================================
 *.tfstate
+*.tfstate.*
 *.tfstate.backup
-*.pem
 .terraform/
+.terraform.lock.hcl
+terraform.tfvars
+*.auto.tfvars
+*.pem
+*.pub
+*.key
+
+# ==========================================
+# Credenciais e Ambientes
+# ==========================================
+.env
+*.env
+!.env.example
+!terraform.tfvars.example
+
+# ==========================================
+# Python & Cache
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.ipynb_checkpoints/
+
+# ==========================================
+# Arquivos de Teste e Saídas Locais
+# ==========================================
+response_*.json
+output.json
+*.csv
+!Exemplos/*.csv
+!Automacao/data/raw/gtfs/*.zip
+resultado_final/
+teste_saida/

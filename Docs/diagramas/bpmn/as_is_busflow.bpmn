@@ -1,0 +1,507 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:bioc="http://bpmn.io/schema/bpmn/biocolor/1.0" xmlns:color="http://www.omg.org/spec/BPMN/non-normative/color/1.0" id="Definitions_AsIs_BusFlow" targetNamespace="http://bpmn.io/schema/bpmn" exporter="Camunda Modeler" exporterVersion="5.49.0">
+  <bpmn:collaboration id="Collaboration_AsIs">
+    <bpmn:participant id="Participant_Motorista" name="Motorista (Operação de Campo)" processRef="Process_Motorista" />
+    <bpmn:participant id="Participant_WhatsApp" name="Comunicação Informal (WhatsApp / Rádio)" processRef="Process_WhatsApp" />
+    <bpmn:participant id="Participant_CCO" name="Centro de Controle Operacional (CCO)" processRef="Process_CCO" />
+    <bpmn:messageFlow id="Flow_Msg_Motorista_WhatsApp" name="Reportar ocorrência via aplicativo/grupo" sourceRef="Activity_Motorista_ReportWhatsApp" targetRef="Activity_WhatsApp_CompartilharOcorrencia" />
+    <bpmn:messageFlow id="Flow_Msg_WhatsApp_CCO" name="Notificar CCO manualmente" sourceRef="Activity_WhatsApp_ReceberComunicacao" targetRef="Activity_CCO_ReceberOcorrencia" />
+    <bpmn:messageFlow id="Flow_Msg_CCO_WhatsApp" name="Transmitir nova orientação de itinerário" sourceRef="Activity_CCO_OrientarTroca" targetRef="Activity_WhatsApp_CompartilharOrientacao" />
+    <bpmn:messageFlow id="Flow_Msg_WhatsApp_Motorista" name="Enviar orientação ao motorista" sourceRef="Activity_WhatsApp_CompartilharOrientacao" targetRef="Activity_Motorista_ReceberOrientacao" />
+    <bpmn:textAnnotation id="TextAnnotation_AsIs1">
+      <bpmn:text>GARGALO OPERACIONAL:
+Comunicação informal e descentralizada via WhatsApp / Rádio. Risco de ruído, atrasos e ausência de rastreabilidade oficial.</bpmn:text>
+    </bpmn:textAnnotation>
+    <bpmn:textAnnotation id="TextAnnotation_AsIs2">
+      <bpmn:text>GARGALO OPERACIONAL:
+Tomada de decisão empírica e 100% reativa. O CCO só descobre o gargalo após a linha colapsar ou o motorista ficar preso no trânsito.</bpmn:text>
+    </bpmn:textAnnotation>
+    <bpmn:association id="Association_AsIs1" sourceRef="Activity_Motorista_ReportWhatsApp" targetRef="TextAnnotation_AsIs1" />
+    <bpmn:association id="Association_AsIs2" sourceRef="Activity_CCO_AvaliarImpacto" targetRef="TextAnnotation_AsIs2" />
+  </bpmn:collaboration>
+  <bpmn:process id="Process_Motorista" isExecutable="false">
+    <bpmn:startEvent id="Event_Motorista_Inicio" name="Início da Escala / Turno">
+      <bpmn:outgoing>Flow_Mot_1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:manualTask id="Activity_Motorista_ReceberEscala" name="Receber escala do dia">
+      <bpmn:incoming>Flow_Mot_1</bpmn:incoming>
+      <bpmn:outgoing>Flow_Mot_2</bpmn:outgoing>
+    </bpmn:manualTask>
+    <bpmn:manualTask id="Activity_Motorista_LocalizarOnibus" name="Localizar ônibus escalado no pátio">
+      <bpmn:incoming>Flow_Mot_2</bpmn:incoming>
+      <bpmn:outgoing>Flow_Mot_3</bpmn:outgoing>
+    </bpmn:manualTask>
+    <bpmn:manualTask id="Activity_Motorista_InspecionarVeiculo" name="Inspecionar veículo">
+      <bpmn:incoming>Flow_Mot_3</bpmn:incoming>
+      <bpmn:outgoing>Flow_Mot_4</bpmn:outgoing>
+    </bpmn:manualTask>
+    <bpmn:exclusiveGateway id="Gateway_Motorista_VeiculoApto" name="Veículo apto para rodar?">
+      <bpmn:incoming>Flow_Mot_4</bpmn:incoming>
+      <bpmn:incoming>Flow_Mot_TrocaOK</bpmn:incoming>
+      <bpmn:outgoing>Flow_Mot_AptoNao</bpmn:outgoing>
+      <bpmn:outgoing>Flow_Mot_AptoSim</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:userTask id="Activity_Motorista_ComunicarManutencao" name="Comunicar manutenção do pátio">
+      <bpmn:incoming>Flow_Mot_AptoNao</bpmn:incoming>
+      <bpmn:outgoing>Flow_Mot_5</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:userTask id="Activity_Motorista_ReceberOutroVeiculo" name="Aguardar e receber outro veículo">
+      <bpmn:incoming>Flow_Mot_5</bpmn:incoming>
+      <bpmn:outgoing>Flow_Mot_TrocaOK</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:manualTask id="Activity_Motorista_IniciarOperacao" name="Iniciar operação da linha">
+      <bpmn:incoming>Flow_Mot_AptoSim</bpmn:incoming>
+      <bpmn:outgoing>Flow_Mot_6</bpmn:outgoing>
+    </bpmn:manualTask>
+    <bpmn:exclusiveGateway id="Gateway_Motorista_Ocorrencia" name="Ocorrência / Gargalo identificado?" default="Flow_Mot_OcorrenciaNao">
+      <bpmn:incoming>Flow_Mot_6</bpmn:incoming>
+      <bpmn:outgoing>Flow_Mot_OcorrenciaNao</bpmn:outgoing>
+      <bpmn:outgoing>Flow_Mot_OcorrenciaSim</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:sendTask id="Activity_Motorista_ReportWhatsApp" name="Comunicar ocorrência via WhatsApp">
+      <bpmn:incoming>Flow_Mot_OcorrenciaSim</bpmn:incoming>
+    </bpmn:sendTask>
+    <bpmn:receiveTask id="Activity_Motorista_ReceberOrientacao" name="Receber orientação de desvio">
+      <bpmn:outgoing>Flow_Mot_7</bpmn:outgoing>
+    </bpmn:receiveTask>
+    <bpmn:manualTask id="Activity_Motorista_ExecutarNovoItinerario" name="Executar novo itinerário / desvio">
+      <bpmn:incoming>Flow_Mot_7</bpmn:incoming>
+      <bpmn:outgoing>Flow_Mot_8</bpmn:outgoing>
+    </bpmn:manualTask>
+    <bpmn:manualTask id="Activity_Motorista_ContinuarOperacao" name="Continuar operação normal">
+      <bpmn:incoming>Flow_Mot_OcorrenciaNao</bpmn:incoming>
+      <bpmn:incoming>Flow_Mot_8</bpmn:incoming>
+      <bpmn:incoming>Flow_Mot_TurnoNao</bpmn:incoming>
+      <bpmn:outgoing>Flow_Mot_9</bpmn:outgoing>
+    </bpmn:manualTask>
+    <bpmn:manualTask id="Activity_Motorista_RealizarPercurso" name="Realizar percurso da linha">
+      <bpmn:incoming>Flow_Mot_9</bpmn:incoming>
+      <bpmn:outgoing>Flow_Mot_10</bpmn:outgoing>
+    </bpmn:manualTask>
+    <bpmn:manualTask id="Activity_Motorista_ChegarPontoFinal" name="Chegar ao ponto final / terminal">
+      <bpmn:incoming>Flow_Mot_10</bpmn:incoming>
+      <bpmn:outgoing>Flow_Mot_11</bpmn:outgoing>
+    </bpmn:manualTask>
+    <bpmn:exclusiveGateway id="Gateway_Motorista_FimTurno" name="Fim do turno operacional?">
+      <bpmn:incoming>Flow_Mot_11</bpmn:incoming>
+      <bpmn:outgoing>Flow_Mot_TurnoSim</bpmn:outgoing>
+      <bpmn:outgoing>Flow_Mot_TurnoNao</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:manualTask id="Activity_Motorista_FinalizarOperacao" name="Finalizar operação do dia">
+      <bpmn:incoming>Flow_Mot_TurnoSim</bpmn:incoming>
+      <bpmn:outgoing>Flow_Mot_12</bpmn:outgoing>
+    </bpmn:manualTask>
+    <bpmn:manualTask id="Activity_Motorista_EntregarVeiculo" name="Entregar veículo na garagem">
+      <bpmn:incoming>Flow_Mot_12</bpmn:incoming>
+      <bpmn:outgoing>Flow_Mot_13</bpmn:outgoing>
+    </bpmn:manualTask>
+    <bpmn:endEvent id="Event_Motorista_Fim" name="Fim do Turno">
+      <bpmn:incoming>Flow_Mot_13</bpmn:incoming>
+      <bpmn:terminateEventDefinition id="TerminateEvent_Mot" />
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_Mot_1" sourceRef="Event_Motorista_Inicio" targetRef="Activity_Motorista_ReceberEscala" />
+    <bpmn:sequenceFlow id="Flow_Mot_2" sourceRef="Activity_Motorista_ReceberEscala" targetRef="Activity_Motorista_LocalizarOnibus" />
+    <bpmn:sequenceFlow id="Flow_Mot_3" sourceRef="Activity_Motorista_LocalizarOnibus" targetRef="Activity_Motorista_InspecionarVeiculo" />
+    <bpmn:sequenceFlow id="Flow_Mot_4" sourceRef="Activity_Motorista_InspecionarVeiculo" targetRef="Gateway_Motorista_VeiculoApto" />
+    <bpmn:sequenceFlow id="Flow_Mot_AptoNao" name="Não" sourceRef="Gateway_Motorista_VeiculoApto" targetRef="Activity_Motorista_ComunicarManutencao" />
+    <bpmn:sequenceFlow id="Flow_Mot_AptoSim" name="Sim" sourceRef="Gateway_Motorista_VeiculoApto" targetRef="Activity_Motorista_IniciarOperacao" />
+    <bpmn:sequenceFlow id="Flow_Mot_5" sourceRef="Activity_Motorista_ComunicarManutencao" targetRef="Activity_Motorista_ReceberOutroVeiculo" />
+    <bpmn:sequenceFlow id="Flow_Mot_TrocaOK" sourceRef="Activity_Motorista_ReceberOutroVeiculo" targetRef="Gateway_Motorista_VeiculoApto" />
+    <bpmn:sequenceFlow id="Flow_Mot_6" sourceRef="Activity_Motorista_IniciarOperacao" targetRef="Gateway_Motorista_Ocorrencia" />
+    <bpmn:sequenceFlow id="Flow_Mot_OcorrenciaNao" name="Não" sourceRef="Gateway_Motorista_Ocorrencia" targetRef="Activity_Motorista_ContinuarOperacao" />
+    <bpmn:sequenceFlow id="Flow_Mot_OcorrenciaSim" name="Sim" sourceRef="Gateway_Motorista_Ocorrencia" targetRef="Activity_Motorista_ReportWhatsApp" />
+    <bpmn:sequenceFlow id="Flow_Mot_7" sourceRef="Activity_Motorista_ReceberOrientacao" targetRef="Activity_Motorista_ExecutarNovoItinerario" />
+    <bpmn:sequenceFlow id="Flow_Mot_8" sourceRef="Activity_Motorista_ExecutarNovoItinerario" targetRef="Activity_Motorista_ContinuarOperacao" />
+    <bpmn:sequenceFlow id="Flow_Mot_9" sourceRef="Activity_Motorista_ContinuarOperacao" targetRef="Activity_Motorista_RealizarPercurso" />
+    <bpmn:sequenceFlow id="Flow_Mot_10" sourceRef="Activity_Motorista_RealizarPercurso" targetRef="Activity_Motorista_ChegarPontoFinal" />
+    <bpmn:sequenceFlow id="Flow_Mot_11" sourceRef="Activity_Motorista_ChegarPontoFinal" targetRef="Gateway_Motorista_FimTurno" />
+    <bpmn:sequenceFlow id="Flow_Mot_TurnoSim" name="Sim" sourceRef="Gateway_Motorista_FimTurno" targetRef="Activity_Motorista_FinalizarOperacao" />
+    <bpmn:sequenceFlow id="Flow_Mot_TurnoNao" name="Não" sourceRef="Gateway_Motorista_FimTurno" targetRef="Activity_Motorista_ContinuarOperacao" />
+    <bpmn:sequenceFlow id="Flow_Mot_12" sourceRef="Activity_Motorista_FinalizarOperacao" targetRef="Activity_Motorista_EntregarVeiculo" />
+    <bpmn:sequenceFlow id="Flow_Mot_13" sourceRef="Activity_Motorista_EntregarVeiculo" targetRef="Event_Motorista_Fim" />
+  </bpmn:process>
+  <bpmn:process id="Process_WhatsApp" isExecutable="false">
+    <bpmn:sendTask id="Activity_WhatsApp_CompartilharOcorrencia" name="Compartilhar ocorrência no grupo da linha">
+      <bpmn:outgoing>Flow_WA_1</bpmn:outgoing>
+    </bpmn:sendTask>
+    <bpmn:receiveTask id="Activity_WhatsApp_ReceberComunicacao" name="Receber comunicação de ocorrência na central">
+      <bpmn:incoming>Flow_WA_1</bpmn:incoming>
+    </bpmn:receiveTask>
+    <bpmn:sendTask id="Activity_WhatsApp_CompartilharOrientacao" name="Compartilhar orientação de desvio no grupo da linha" />
+    <bpmn:sequenceFlow id="Flow_WA_1" sourceRef="Activity_WhatsApp_CompartilharOcorrencia" targetRef="Activity_WhatsApp_ReceberComunicacao" />
+  </bpmn:process>
+  <bpmn:process id="Process_CCO" isExecutable="false">
+    <bpmn:receiveTask id="Activity_CCO_ReceberOcorrencia" name="Receber notificação manual da ocorrência">
+      <bpmn:outgoing>Flow_CCO_1</bpmn:outgoing>
+    </bpmn:receiveTask>
+    <bpmn:userTask id="Activity_CCO_AvaliarImpacto" name="Avaliar impacto operacional (empírico / reativo)">
+      <bpmn:incoming>Flow_CCO_1</bpmn:incoming>
+      <bpmn:outgoing>Flow_CCO_2</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:exclusiveGateway id="Gateway_CCO_AlterarOperacao" name="Necessário alterar operação?">
+      <bpmn:incoming>Flow_CCO_2</bpmn:incoming>
+      <bpmn:outgoing>Flow_CCO_AlterarNao</bpmn:outgoing>
+      <bpmn:outgoing>Flow_CCO_AlterarSim</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:userTask id="Activity_CCO_AnalisarLinha" name="Analisar linha afetada e opções de desvio">
+      <bpmn:incoming>Flow_CCO_AlterarSim</bpmn:incoming>
+      <bpmn:outgoing>Flow_CCO_3</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:exclusiveGateway id="Gateway_CCO_TrocaItinerario" name="Troca de itinerário necessária?">
+      <bpmn:incoming>Flow_CCO_3</bpmn:incoming>
+      <bpmn:outgoing>Flow_CCO_TrocaSim</bpmn:outgoing>
+      <bpmn:outgoing>Flow_CCO_TrocaNao</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:sendTask id="Activity_CCO_OrientarTroca" name="Orientar troca de itinerário / desvio">
+      <bpmn:incoming>Flow_CCO_TrocaSim</bpmn:incoming>
+    </bpmn:sendTask>
+    <bpmn:userTask id="Activity_CCO_Monitorar" name="Monitorar e continuar operação">
+      <bpmn:incoming>Flow_CCO_AlterarNao</bpmn:incoming>
+      <bpmn:incoming>Flow_CCO_TrocaNao</bpmn:incoming>
+      <bpmn:outgoing>Flow_CCO_4</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:userTask id="Activity_CCO_AguardarNova" name="Aguardar nova ocorrência">
+      <bpmn:incoming>Flow_CCO_4</bpmn:incoming>
+      <bpmn:outgoing>Flow_CCO_Loop</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:sequenceFlow id="Flow_CCO_1" sourceRef="Activity_CCO_ReceberOcorrencia" targetRef="Activity_CCO_AvaliarImpacto" />
+    <bpmn:sequenceFlow id="Flow_CCO_2" sourceRef="Activity_CCO_AvaliarImpacto" targetRef="Gateway_CCO_AlterarOperacao" />
+    <bpmn:sequenceFlow id="Flow_CCO_AlterarNao" name="Não" sourceRef="Gateway_CCO_AlterarOperacao" targetRef="Activity_CCO_Monitorar" />
+    <bpmn:sequenceFlow id="Flow_CCO_AlterarSim" name="Sim" sourceRef="Gateway_CCO_AlterarOperacao" targetRef="Activity_CCO_AnalisarLinha" />
+    <bpmn:sequenceFlow id="Flow_CCO_3" sourceRef="Activity_CCO_AnalisarLinha" targetRef="Gateway_CCO_TrocaItinerario" />
+    <bpmn:sequenceFlow id="Flow_CCO_TrocaSim" name="Sim" sourceRef="Gateway_CCO_TrocaItinerario" targetRef="Activity_CCO_OrientarTroca" />
+    <bpmn:sequenceFlow id="Flow_CCO_TrocaNao" name="Não" sourceRef="Gateway_CCO_TrocaItinerario" targetRef="Activity_CCO_Monitorar" />
+    <bpmn:sequenceFlow id="Flow_CCO_4" sourceRef="Activity_CCO_Monitorar" targetRef="Activity_CCO_AguardarNova" />
+    <bpmn:sequenceFlow id="Flow_CCO_Loop" sourceRef="Activity_CCO_AguardarNova" targetRef="Activity_CCO_ReceberOcorrencia" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_AsIs">
+    <bpmndi:BPMNPlane id="BPMNPlane_AsIs" bpmnElement="Collaboration_AsIs">
+      <bpmndi:BPMNShape id="Participant_Motorista_di" bpmnElement="Participant_Motorista" isHorizontal="true" bioc:stroke="#00695c" bioc:fill="#e0f2f1" color:background-color="#e0f2f1" color:border-color="#00695c">
+        <dc:Bounds x="160" y="80" width="2240" height="520" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_Motorista_Inicio_di" bpmnElement="Event_Motorista_Inicio" bioc:stroke="#2e7d32" bioc:fill="#a5d6a7" color:background-color="#a5d6a7" color:border-color="#2e7d32">
+        <dc:Bounds x="220" y="180" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="202" y="223" width="73" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_Motorista_ReceberEscala_di" bpmnElement="Activity_Motorista_ReceberEscala">
+        <dc:Bounds x="300" y="158" width="110" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_Motorista_LocalizarOnibus_di" bpmnElement="Activity_Motorista_LocalizarOnibus">
+        <dc:Bounds x="450" y="158" width="110" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_Motorista_InspecionarVeiculo_di" bpmnElement="Activity_Motorista_InspecionarVeiculo">
+        <dc:Bounds x="600" y="158" width="110" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_Motorista_VeiculoApto_di" bpmnElement="Gateway_Motorista_VeiculoApto" isMarkerVisible="true" bioc:stroke="#5b176d" bioc:fill="#e1bee7" color:background-color="#e1bee7" color:border-color="#5b176d">
+        <dc:Bounds x="760" y="173" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="737" y="236" width="86" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_Motorista_ComunicarManutencao_di" bpmnElement="Activity_Motorista_ComunicarManutencao">
+        <dc:Bounds x="870" y="158" width="110" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_Motorista_ReceberOutroVeiculo_di" bpmnElement="Activity_Motorista_ReceberOutroVeiculo">
+        <dc:Bounds x="1030" y="158" width="110" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_Motorista_IniciarOperacao_di" bpmnElement="Activity_Motorista_IniciarOperacao">
+        <dc:Bounds x="870" y="270" width="110" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_Motorista_Ocorrencia_di" bpmnElement="Gateway_Motorista_Ocorrencia" isMarkerVisible="true" bioc:stroke="#5b176d" bioc:fill="#e1bee7" color:background-color="#e1bee7" color:border-color="#5b176d">
+        <dc:Bounds x="1040" y="285" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1034" y="248" width="62" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_Motorista_ReportWhatsApp_di" bpmnElement="Activity_Motorista_ReportWhatsApp" bioc:stroke="#c62828" bioc:fill="#ffebee" color:background-color="#ffebee" color:border-color="#c62828">
+        <dc:Bounds x="1010" y="420" width="110" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_Motorista_ReceberOrientacao_di" bpmnElement="Activity_Motorista_ReceberOrientacao">
+        <dc:Bounds x="1890" y="470" width="110" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_Motorista_ExecutarNovoItinerario_di" bpmnElement="Activity_Motorista_ExecutarNovoItinerario">
+        <dc:Bounds x="2060" y="470" width="110" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_Motorista_ContinuarOperacao_di" bpmnElement="Activity_Motorista_ContinuarOperacao">
+        <dc:Bounds x="1190" y="270" width="110" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_Motorista_RealizarPercurso_di" bpmnElement="Activity_Motorista_RealizarPercurso">
+        <dc:Bounds x="1360" y="270" width="110" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_Motorista_ChegarPontoFinal_di" bpmnElement="Activity_Motorista_ChegarPontoFinal">
+        <dc:Bounds x="1530" y="270" width="110" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_Motorista_FimTurno_di" bpmnElement="Gateway_Motorista_FimTurno" isMarkerVisible="true" bioc:stroke="#5b176d" bioc:fill="#e1bee7" color:background-color="#e1bee7" color:border-color="#5b176d">
+        <dc:Bounds x="1710" y="285" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1704" y="342" width="63" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_Motorista_FinalizarOperacao_di" bpmnElement="Activity_Motorista_FinalizarOperacao">
+        <dc:Bounds x="1840" y="270" width="110" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_Motorista_EntregarVeiculo_di" bpmnElement="Activity_Motorista_EntregarVeiculo">
+        <dc:Bounds x="2020" y="270" width="110" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_Motorista_Fim_di" bpmnElement="Event_Motorista_Fim" bioc:stroke="#c62828" bioc:fill="#ef9a9a" color:background-color="#ef9a9a" color:border-color="#c62828">
+        <dc:Bounds x="2210" y="292" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="2195" y="335" width="67" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_Mot_1_di" bpmnElement="Flow_Mot_1">
+        <di:waypoint x="256" y="198" />
+        <di:waypoint x="300" y="198" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Mot_2_di" bpmnElement="Flow_Mot_2">
+        <di:waypoint x="410" y="198" />
+        <di:waypoint x="450" y="198" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Mot_3_di" bpmnElement="Flow_Mot_3">
+        <di:waypoint x="560" y="198" />
+        <di:waypoint x="600" y="198" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Mot_4_di" bpmnElement="Flow_Mot_4">
+        <di:waypoint x="710" y="198" />
+        <di:waypoint x="760" y="198" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Mot_AptoNao_di" bpmnElement="Flow_Mot_AptoNao">
+        <di:waypoint x="810" y="198" />
+        <di:waypoint x="870" y="198" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="829" y="180" width="21" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Mot_AptoSim_di" bpmnElement="Flow_Mot_AptoSim">
+        <di:waypoint x="785" y="223" />
+        <di:waypoint x="785" y="310" />
+        <di:waypoint x="870" y="310" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="791" y="264" width="19" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Mot_5_di" bpmnElement="Flow_Mot_5">
+        <di:waypoint x="980" y="198" />
+        <di:waypoint x="1030" y="198" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Mot_TrocaOK_di" bpmnElement="Flow_Mot_TrocaOK">
+        <di:waypoint x="1085" y="158" />
+        <di:waypoint x="1085" y="120" />
+        <di:waypoint x="785" y="120" />
+        <di:waypoint x="785" y="173" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Mot_6_di" bpmnElement="Flow_Mot_6">
+        <di:waypoint x="980" y="310" />
+        <di:waypoint x="1040" y="310" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Mot_OcorrenciaNao_di" bpmnElement="Flow_Mot_OcorrenciaNao">
+        <di:waypoint x="1090" y="310" />
+        <di:waypoint x="1190" y="310" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1130" y="292" width="21" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Mot_OcorrenciaSim_di" bpmnElement="Flow_Mot_OcorrenciaSim">
+        <di:waypoint x="1065" y="335" />
+        <di:waypoint x="1065" y="420" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1071" y="375" width="19" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Mot_7_di" bpmnElement="Flow_Mot_7">
+        <di:waypoint x="2000" y="510" />
+        <di:waypoint x="2060" y="510" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Mot_8_di" bpmnElement="Flow_Mot_8">
+        <di:waypoint x="2115" y="470" />
+        <di:waypoint x="2115" y="400" />
+        <di:waypoint x="1245" y="400" />
+        <di:waypoint x="1245" y="350" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Mot_9_di" bpmnElement="Flow_Mot_9">
+        <di:waypoint x="1300" y="310" />
+        <di:waypoint x="1360" y="310" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Mot_10_di" bpmnElement="Flow_Mot_10">
+        <di:waypoint x="1470" y="310" />
+        <di:waypoint x="1530" y="310" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Mot_11_di" bpmnElement="Flow_Mot_11">
+        <di:waypoint x="1640" y="310" />
+        <di:waypoint x="1710" y="310" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Mot_TurnoSim_di" bpmnElement="Flow_Mot_TurnoSim">
+        <di:waypoint x="1760" y="310" />
+        <di:waypoint x="1840" y="310" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1790" y="292" width="19" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Mot_TurnoNao_di" bpmnElement="Flow_Mot_TurnoNao">
+        <di:waypoint x="1735" y="285" />
+        <di:waypoint x="1735" y="210" />
+        <di:waypoint x="1245" y="210" />
+        <di:waypoint x="1245" y="270" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1480" y="192" width="21" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Mot_12_di" bpmnElement="Flow_Mot_12">
+        <di:waypoint x="1950" y="310" />
+        <di:waypoint x="2020" y="310" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Mot_13_di" bpmnElement="Flow_Mot_13">
+        <di:waypoint x="2130" y="310" />
+        <di:waypoint x="2210" y="310" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="Participant_WhatsApp_di" bpmnElement="Participant_WhatsApp" isHorizontal="true" bioc:stroke="#e65100" bioc:fill="#ffe0b2" color:background-color="#ffe0b2" color:border-color="#e65100">
+        <dc:Bounds x="160" y="640" width="2240" height="360" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_WhatsApp_CompartilharOcorrencia_di" bpmnElement="Activity_WhatsApp_CompartilharOcorrencia">
+        <dc:Bounds x="1010" y="780" width="110" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_WhatsApp_ReceberComunicacao_di" bpmnElement="Activity_WhatsApp_ReceberComunicacao">
+        <dc:Bounds x="1190" y="780" width="110" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_WhatsApp_CompartilharOrientacao_di" bpmnElement="Activity_WhatsApp_CompartilharOrientacao">
+        <dc:Bounds x="1890" y="780" width="110" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_WA_1_di" bpmnElement="Flow_WA_1">
+        <di:waypoint x="1120" y="820" />
+        <di:waypoint x="1190" y="820" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="Participant_CCO_di" bpmnElement="Participant_CCO" isHorizontal="true" bioc:stroke="#1565c0" bioc:fill="#bbdefb" color:background-color="#bbdefb" color:border-color="#1565c0">
+        <dc:Bounds x="160" y="1040" width="2240" height="520" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_CCO_ReceberOcorrencia_di" bpmnElement="Activity_CCO_ReceberOcorrencia">
+        <dc:Bounds x="1190" y="1190" width="110" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_CCO_AvaliarImpacto_di" bpmnElement="Activity_CCO_AvaliarImpacto" bioc:stroke="#c62828" bioc:fill="#ffebee" color:background-color="#ffebee" color:border-color="#c62828">
+        <dc:Bounds x="1350" y="1190" width="110" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_CCO_AlterarOperacao_di" bpmnElement="Gateway_CCO_AlterarOperacao" isMarkerVisible="true" bioc:stroke="#5b176d" bioc:fill="#e1bee7" color:background-color="#e1bee7" color:border-color="#5b176d">
+        <dc:Bounds x="1515" y="1205" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1496" y="1167" width="87" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_CCO_AnalisarLinha_di" bpmnElement="Activity_CCO_AnalisarLinha">
+        <dc:Bounds x="1610" y="1420" width="110" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_CCO_TrocaItinerario_di" bpmnElement="Gateway_CCO_TrocaItinerario" isMarkerVisible="true" bioc:stroke="#5b176d" bioc:fill="#e1bee7" color:background-color="#e1bee7" color:border-color="#5b176d">
+        <dc:Bounds x="1765" y="1435" width="50" height="50" />
+        <bpmndi:BPMNLabel color:color="#5b176d">
+          <dc:Bounds x="1760" y="1490" width="60" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_CCO_OrientarTroca_di" bpmnElement="Activity_CCO_OrientarTroca">
+        <dc:Bounds x="1890" y="1420" width="110" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_CCO_Monitorar_di" bpmnElement="Activity_CCO_Monitorar">
+        <dc:Bounds x="1610" y="1190" width="110" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Activity_CCO_AguardarNova_di" bpmnElement="Activity_CCO_AguardarNova">
+        <dc:Bounds x="1770" y="1190" width="110" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_CCO_1_di" bpmnElement="Flow_CCO_1">
+        <di:waypoint x="1300" y="1230" />
+        <di:waypoint x="1350" y="1230" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_CCO_2_di" bpmnElement="Flow_CCO_2">
+        <di:waypoint x="1460" y="1230" />
+        <di:waypoint x="1515" y="1230" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_CCO_AlterarNao_di" bpmnElement="Flow_CCO_AlterarNao">
+        <di:waypoint x="1565" y="1230" />
+        <di:waypoint x="1610" y="1230" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1577" y="1212" width="21" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_CCO_AlterarSim_di" bpmnElement="Flow_CCO_AlterarSim">
+        <di:waypoint x="1540" y="1255" />
+        <di:waypoint x="1540" y="1460" />
+        <di:waypoint x="1610" y="1460" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1546" y="1355" width="19" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_CCO_3_di" bpmnElement="Flow_CCO_3">
+        <di:waypoint x="1720" y="1460" />
+        <di:waypoint x="1765" y="1460" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_CCO_TrocaSim_di" bpmnElement="Flow_CCO_TrocaSim">
+        <di:waypoint x="1815" y="1460" />
+        <di:waypoint x="1890" y="1460" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1843" y="1442" width="19" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_CCO_TrocaNao_di" bpmnElement="Flow_CCO_TrocaNao">
+        <di:waypoint x="1790" y="1435" />
+        <di:waypoint x="1790" y="1390" />
+        <di:waypoint x="1665" y="1390" />
+        <di:waypoint x="1665" y="1270" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1717" y="1372" width="21" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_CCO_4_di" bpmnElement="Flow_CCO_4">
+        <di:waypoint x="1720" y="1230" />
+        <di:waypoint x="1770" y="1230" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_CCO_Loop_di" bpmnElement="Flow_CCO_Loop">
+        <di:waypoint x="1825" y="1190" />
+        <di:waypoint x="1825" y="1140" />
+        <di:waypoint x="1245" y="1140" />
+        <di:waypoint x="1245" y="1190" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Association_AsIs2_di" bpmnElement="Association_AsIs2">
+        <di:waypoint x="1377" y="1270" />
+        <di:waypoint x="1343" y="1320" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="TextAnnotation_AsIs1_di" bpmnElement="TextAnnotation_AsIs1" bioc:stroke="#e65100" bioc:fill="#fff3e0" color:background-color="#fff3e0" color:border-color="#e65100">
+        <dc:Bounds x="700" y="700" width="260" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_Msg_Motorista_WhatsApp_di" bpmnElement="Flow_Msg_Motorista_WhatsApp">
+        <di:waypoint x="1065" y="500" />
+        <di:waypoint x="1065" y="780" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1071" y="650" width="78" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Msg_WhatsApp_CCO_di" bpmnElement="Flow_Msg_WhatsApp_CCO">
+        <di:waypoint x="1245" y="860" />
+        <di:waypoint x="1245" y="1190" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1256" y="1066" width="68" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Msg_CCO_WhatsApp_di" bpmnElement="Flow_Msg_CCO_WhatsApp">
+        <di:waypoint x="1945" y="1420" />
+        <di:waypoint x="1945" y="860" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1955" y="1120" width="80" height="40" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Msg_WhatsApp_Motorista_di" bpmnElement="Flow_Msg_WhatsApp_Motorista">
+        <di:waypoint x="1945" y="780" />
+        <di:waypoint x="1945" y="550" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1955" y="650" width="80" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Association_AsIs1_di" bpmnElement="Association_AsIs1">
+        <di:waypoint x="1010" y="460" />
+        <di:waypoint x="830" y="700" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="TextAnnotation_AsIs2_di" bpmnElement="TextAnnotation_AsIs2" bioc:stroke="#c62828" bioc:fill="#ffebee" color:background-color="#ffebee" color:border-color="#c62828">
+        <dc:Bounds x="1260" y="1320" width="261.7120266781411" height="72" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>
