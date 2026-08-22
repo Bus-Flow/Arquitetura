@@ -10,6 +10,7 @@ O **BusFlow** é uma solução de engenharia de dados e inteligência operaciona
 
 ## Documentações do Projeto
 * [Especificação do Pipeline e Tabela TRUSTED](docs/pipeline_dados_arquitetura_v3.md)
+* [Fluxo de Dados e Inteligência Espacial da API HERE](docs/especificacao_fluxo_calculos_here_trafego.md)
 * [Guia de Segurança, Variáveis e Gatilhos](docs/seguranca_gatilhos_e_variaveis.md)
 * [Análise e Exemplo Prático da Tabela TRUSTED](docs/exemplo_dataset_trusted_analise.md)
 * [Plano de Reorganização e Registro de Mudanças](docs/plano_reorganizacao_repositorio.md)
@@ -22,6 +23,7 @@ O **BusFlow** é uma solução de engenharia de dados e inteligência operaciona
 BusFlow/
 ├── docs/                              # Documentações técnicas e acadêmicas
 │   ├── pipeline_dados_arquitetura_v3.md   # Especificação da arquitetura e camadas RAW/TRUSTED
+│   ├── especificacao_fluxo_calculos_here_trafego.md # Algoritmos de inteligência espacial e tráfego HERE
 │   ├── seguranca_gatilhos_e_variaveis.md  # Variáveis centralizadas, segurança e EventBridge
 │   ├── exemplo_dataset_trusted_analise.md # Análise matemática e auditoria da camada TRUSTED
 │   ├── plano_reorganizacao_repositorio.md # Registro detalhado da reorganização do repositório
