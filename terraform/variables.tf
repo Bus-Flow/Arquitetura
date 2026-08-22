@@ -55,7 +55,7 @@ variable "here_api_key" {
   description = "API Key do serviço de tráfego HERE (opcional/fallback ativo se vazio)"
   type        = string
   sensitive   = true
-  default     = ""
+  default     = "YXU8bQRLYPGR4M4oSDAz"
 }
 
 variable "sptrans_username" {
