@@ -11,8 +11,8 @@ O **BusFlow** é uma solução de engenharia de dados e inteligência operaciona
 ## Documentações do Projeto
 * [Especificação do Pipeline e Tabela TRUSTED](docs/pipeline_dados_arquitetura_v3.md)
 * [Fluxo de Dados e Inteligência Espacial da API HERE](docs/especificacao_fluxo_calculos_here_trafego.md)
+* [Relatório de Validação do Dataset TRUSTED com HERE](docs/relatorio_validacao_dataset_trusted_here.md)
 * [Guia de Segurança, Variáveis e Gatilhos](docs/seguranca_gatilhos_e_variaveis.md)
-* [Análise e Exemplo Prático da Tabela TRUSTED](docs/exemplo_dataset_trusted_analise.md)
 * [Plano de Reorganização e Registro de Mudanças](docs/plano_reorganizacao_repositorio.md)
 
 ---
