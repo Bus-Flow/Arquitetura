@@ -19,9 +19,9 @@ Este documento registra a reestruturação arquitetural e organizacional do repo
 
 | Local Antigo | Novo Caminho Padronizado | Descrição |
 | :--- | :--- | :--- |
-| `..\BusFlow\BusFlow.docx`, `.pdf` | `Docs/tcc/` | Documentação oficial e monografia do TCC. |
-| `..\BusFlow\*.bpmn`, `*.svg` e raiz | `Docs/diagramas/bpmn/` | Modelagem de processos de negócio As-Is e To-Be. |
-| `Desenhos/` e `..\BusFlow\Arquitetura\` | `Docs/diagramas/arquitetura/` | Diagramas de arquitetura em `.drawio`, `.svg` e `.png`. |
+| `..\BusFlow\BusFlow.docx`, `.pdf` | `docs/tcc/` | Documentação oficial e monografia do TCC. |
+| `..\BusFlow\*.bpmn`, `*.svg` e raiz | `docs/diagramas/bpmn/` | Modelagem de processos de negócio As-Is e To-Be. |
+| `Desenhos/` e `..\BusFlow\Arquitetura\` | `docs/diagramas/arquitetura/` | Diagramas de arquitetura em `.drawio`, `.svg` e `.png`. |
 | `Docs/fato_operacao_*.csv` | `data/samples/fato_operacao_exemplo.csv` | Dataset consolidado gerado na camada TRUSTED. |
 | `Automacao/data/raw/gtfs/*.zip` | `data/raw/gtfs/` | Arquivos de dados estáticos GTFS da SPTrans. |
 | `Exemplos/raw_busflow_*.json` | `data/raw/` | Amostras de payloads brutos capturados das APIs. |
@@ -35,7 +35,7 @@ Este documento registra a reestruturação arquitetural e organizacional do repo
 
 ```text
 BusFlow/
-├── Docs/                              # Documentações técnicas e acadêmicas
+├── docs/                              # Documentações técnicas e acadêmicas
 │   ├── pipeline_dados_arquitetura_v3.md   # Especificação da arquitetura e camadas RAW/TRUSTED
 │   ├── seguranca_gatilhos_e_variaveis.md  # Variáveis centralizadas, segurança e EventBridge
 │   ├── exemplo_dataset_trusted_analise.md # Análise matemática e auditoria da camada TRUSTED

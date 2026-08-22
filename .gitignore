@@ -34,7 +34,7 @@ __pycache__/
 response_*.json
 output.json
 *.csv
-!Exemplos/*.csv
-!Automacao/data/raw/gtfs/*.zip
+!data/samples/*.csv
+!data/raw/gtfs/*.zip
 resultado_final/
 teste_saida/

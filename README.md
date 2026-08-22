@@ -9,10 +9,10 @@ O **BusFlow** é uma solução de engenharia de dados e inteligência operaciona
 
 
 ## Documentações do Projeto
-* [Especificação do Pipeline e Tabela TRUSTED](Docs/pipeline_dados_arquitetura_v3.md)
-* [Guia de Segurança, Variáveis e Gatilhos](Docs/seguranca_gatilhos_e_variaveis.md)
-* [Análise e Exemplo Prático da Tabela TRUSTED](Docs/exemplo_dataset_trusted_analise.md)
-* [Plano de Reorganização e Registro de Mudanças](Docs/plano_reorganizacao_repositorio.md)
+* [Especificação do Pipeline e Tabela TRUSTED](docs/pipeline_dados_arquitetura_v3.md)
+* [Guia de Segurança, Variáveis e Gatilhos](docs/seguranca_gatilhos_e_variaveis.md)
+* [Análise e Exemplo Prático da Tabela TRUSTED](docs/exemplo_dataset_trusted_analise.md)
+* [Plano de Reorganização e Registro de Mudanças](docs/plano_reorganizacao_repositorio.md)
 
 ---
 
@@ -20,7 +20,7 @@ O **BusFlow** é uma solução de engenharia de dados e inteligência operaciona
 
 ```text
 BusFlow/
-├── Docs/                              # Documentações técnicas e acadêmicas
+├── docs/                              # Documentações técnicas e acadêmicas
 │   ├── pipeline_dados_arquitetura_v3.md   # Especificação da arquitetura e camadas RAW/TRUSTED
 │   ├── seguranca_gatilhos_e_variaveis.md  # Variáveis centralizadas, segurança e EventBridge
 │   ├── exemplo_dataset_trusted_analise.md # Análise matemática e auditoria da camada TRUSTED
