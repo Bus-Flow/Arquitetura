@@ -20,7 +20,8 @@ resource "aws_lambda_function" "ingestion" {
   role          = data.aws_iam_role.lab_role.arn
   filename      = "${path.module}/lambda_function/ingestion.zip"
   source_code_hash = filebase64sha256("${path.module}/lambda_function/ingestion.zip")
-  timeout       = 60
+  timeout       = 120
+  memory_size   = 1024
 
   layers = [
     "arn:aws:lambda:us-east-1:336392948345:layer:AWSSDKPandas-Python39:28"
@@ -50,6 +51,7 @@ resource "aws_lambda_function" "ingestion_gtfs" {
   filename      = "${path.module}/lambda_function/ingestion_gtfs.zip"
   source_code_hash = filebase64sha256("${path.module}/lambda_function/ingestion_gtfs.zip")
   timeout       = 180
+  memory_size   = 512
 
   layers = [
     "arn:aws:lambda:us-east-1:336392948345:layer:AWSSDKPandas-Python39:28"
@@ -78,6 +80,7 @@ resource "aws_lambda_function" "etl" {
   filename      = "${path.module}/lambda_function/etl.zip"
   source_code_hash = filebase64sha256("${path.module}/lambda_function/etl.zip")
   timeout       = 180
+  memory_size   = 1024
   vpc_config {
     subnet_ids         = var.private_subnet_ids
     security_group_ids = [var.lambda_sg_id]

@@ -167,6 +167,10 @@ def coletar_trafego_here(api_key, bbox):
         }
         
     session = requests.Session()
+    session.headers.update({
+        "User-Agent": "BusFlow-Lambda-Ingestion/3.0",
+        "Accept-Encoding": "gzip"
+    })
     try:
         # 1. Flow
         params = {
@@ -174,12 +178,12 @@ def coletar_trafego_here(api_key, bbox):
             "locationReferencing": "shape",
             "apiKey": api_key
         }
-        resp_flow = session.get(HERE_FLOW_URL, params=params, timeout=40)
+        resp_flow = session.get(HERE_FLOW_URL, params=params, timeout=30)
         resp_flow.raise_for_status()
         flow_raw = resp_flow.json()
         
         # 2. Incidents
-        resp_inc = session.get(HERE_INCIDENTS_URL, params=params, timeout=40)
+        resp_inc = session.get(HERE_INCIDENTS_URL, params=params, timeout=30)
         resp_inc.raise_for_status()
         inc_raw = resp_inc.json()
         
