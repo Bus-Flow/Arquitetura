@@ -371,14 +371,14 @@ def lambda_handler(event, context):
                 4
             )
             
-            # Classificação de Risco
-            if go_score <= 0.60:
+            # Classificação de Risco (Matriz Calibrada de 4 Níveis)
+            if go_score <= 0.45:
                 status_classificacao = "Estabilizado"
                 acao_recomendada = "Operação Normal"
-            elif go_score <= 0.80:
+            elif go_score <= 0.55:
                 status_classificacao = "Risco"
                 acao_recomendada = "Monitorar Linha em Alerta"
-            elif go_score <= 0.95:
+            elif go_score <= 0.65:
                 status_classificacao = "Alto Risco"
                 acao_recomendada = f"Disponibilizar {max(1, deficit_operacional)} ônibus"
                 alertas_risco.append((codigo_linha, status_classificacao, deficit_operacional))

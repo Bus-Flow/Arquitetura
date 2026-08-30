@@ -111,8 +111,8 @@ A camada **TRUSTED** armazena o dado tabular consolidado, enriquecido e normaliz
 | **--- TARGETS & CLASSIFICAÇÃO OPERACIONAL ---** | | | |
 | `deficit_operacional` | `INT` | Calculado | $\text{Frota Estimada Necessária} - \text{Frota Ativa Real}$. |
 | `go_gargalo_operacional` | `FLOAT` | Calculado ($0.0 - 1.0$) | Índice Geral de Gargalo Operacional ($GO$). |
-| `status_classificacao` | `VARCHAR(30)` | Calculado | `Estabilizado` (0-60%), `Risco` (61-80%), `Alto Risco` (81-95%), `Congestionamento` (96-100%). |
-| `acao_recomendada` | `VARCHAR(100)` | Regra / ML Target | Ex: `Operação Normal`, `Disponibilizar 1 ônibus`, `Disponibilizar 2 ônibus`. |
+| `status_classificacao` | `VARCHAR(30)` | Calculado | `Estabilizado` (0-45%), `Risco` (46-55%), `Alto Risco` (56-65%), `Congestionamento` (66-100%). |
+| `acao_recomendada` | `VARCHAR(100)` | Regra / ML Target | Ex: `Operação Normal`, `Monitorar Linha em Alerta`, `Disponibilizar 1 ônibus`, `Disponibilizar 2 ônibus`. |
 
 ---
 
@@ -149,11 +149,11 @@ $$\text{Risco Congestionamento Frota } (DFI) = \min\left(100\%, \frac{\text{Frot
 ### 4.6. Gargalo Operacional Geral ($GO$)
 $$GO = (0.15 \times HP) + (0.25 \times \frac{IAC}{100}) + (0.25 \times \frac{IIV}{100}) + (0.25 \times \frac{DFI}{100}) + (0.10 \times (1 - AC))$$
 
-* **Status Final:**
-  * $0.00 \le GO \le 0.60$: **Estabilizado**
-  * $0.61 \le GO \le 0.80$: **Risco**
-  * $0.81 \le GO \le 0.95$: **Alto Risco**
-  * $0.96 \le GO \le 1.00$: **Congestionamento**
+* **Status Final (Matriz Calibrada de 4 Níveis):**
+  * $0.00 \le GO \le 0.45$: **Estabilizado** (`Operação Normal`)
+  * $0.46 \le GO \le 0.55$: **Risco** (`Monitorar Linha em Alerta`)
+  * $0.56 \le GO \le 0.65$: **Alto Risco** (`Disponibilizar {Déficit} ônibus`) $\rightarrow$ *Dispara Notificação AWS SNS*
+  * $0.66 \le GO \le 1.00$: **Congestionamento** (`Disponibilizar {Déficit} ônibus / Desvios`) $\rightarrow$ *Dispara Notificação AWS SNS*
 
 ---
 
