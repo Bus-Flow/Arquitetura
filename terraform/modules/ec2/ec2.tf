@@ -1,10 +1,15 @@
 module "net" {
-    source = "../network"
+  source = "../network"
 }
 
-resource "aws_key_pair" "generated_key"{
-    key_name = var.key_pair_name
-    public_key = file("terraform_key.pem.pub")
+resource "tls_private_key" "generated_key" {
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+
+resource "aws_key_pair" "generated_key" {
+  key_name   = var.key_pair_name
+  public_key = tls_private_key.generated_key.public_key_openssh
 }
 
 /*==== EC2 Web App - Subnet Pública 1 ====*/

@@ -4,6 +4,10 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 4.16"
     }
+    tls = {
+      source  = "hashicorp/tls"
+      version = "~> 4.0"
+    }
   }
   required_version = ">= 1.2.0"
 }
@@ -12,7 +16,7 @@ provider "aws" {
 }
 
 module "net" {
-    source = "./modules/network"
+  source = "./modules/network"
 }
 
 module "s3" {
@@ -20,7 +24,7 @@ module "s3" {
 }
 
 module "sns" {
-  source = "./modules/sns"
+  source     = "./modules/sns"
   email_list = var.email_list
 }
 
@@ -35,22 +39,23 @@ module "rds" {
 }
 
 module "lambda" {
-  source                       = "./modules/lambda"
-  email_list                   = var.email_list
-  raw_arn                      = module.s3.raw_arn
-  raw_name                     = module.s3.raw_name
-  trusted_name                 = module.s3.trusted_name
-  trusted_arn                  = module.s3.trusted_arn
-  topic_arn                    = module.sns.topic_arn
-  lambda_sg_id                 = module.net.lambda_sg_id
-  private_subnet_ids           = module.net.subnet_private_ids
-  sptrans_token                = var.sptrans_token
-  openweather_key              = var.openweather_key
-  here_api_key                 = var.here_api_key
-  sptrans_username             = var.sptrans_username
-  sptrans_password             = var.sptrans_password
-  schedule_realtime_expression = var.schedule_realtime_expression
-  schedule_gtfs_expression     = var.schedule_gtfs_expression
+  source                                 = "./modules/lambda"
+  email_list                             = var.email_list
+  raw_arn                                = module.s3.raw_arn
+  raw_name                               = module.s3.raw_name
+  trusted_name                           = module.s3.trusted_name
+  trusted_arn                            = module.s3.trusted_arn
+  topic_arn                              = module.sns.topic_arn
+  lambda_sg_id                           = module.net.lambda_sg_id
+  private_subnet_ids                     = module.net.subnet_private_ids
+  sptrans_token                          = var.sptrans_token
+  openweather_key                        = var.openweather_key
+  here_api_key                           = var.here_api_key
+  sptrans_username                       = var.sptrans_username
+  sptrans_password                       = var.sptrans_password
+  schedule_realtime_off_peak_expressions = var.schedule_realtime_off_peak_expressions
+  schedule_realtime_peak_expression      = var.schedule_realtime_peak_expression
+  schedule_gtfs_expression               = var.schedule_gtfs_expression
 }
 
 module "sagemaker" {
@@ -62,7 +67,7 @@ module "sagemaker" {
 }
 
 module "ec2" {
-    source = "./modules/ec2"
+  source = "./modules/ec2"
 }
 
 

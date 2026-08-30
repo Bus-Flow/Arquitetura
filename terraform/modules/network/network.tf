@@ -1,18 +1,18 @@
 /*==== Criando a VPC ======*/
 resource "aws_vpc" "vpc" {
-  cidr_block                = "10.0.0.0/24"
-  enable_dns_hostnames      = true
-  enable_dns_support        = true
+  cidr_block           = "10.0.0.0/24"
+  enable_dns_hostnames = true
+  enable_dns_support   = true
   tags = {
-    Name                    = "vpc-busflow"
+    Name = "vpc-busflow"
   }
 }
 
 /*==== internet gateway igw ====*/
 resource "aws_internet_gateway" "igw" {
-  vpc_id                    = aws_vpc.vpc.id
+  vpc_id = aws_vpc.vpc.id
   tags = {
-    Name                    = "igw-busflow"
+    Name = "igw-busflow"
   }
 }
 
@@ -20,214 +20,214 @@ resource "aws_internet_gateway" "igw" {
 
 /*==== sub-redes públicas ====*/
 resource "aws_subnet" "public_subnet" {
-    count                   = length(var.public_subnet_cidrs)
-    vpc_id                  = aws_vpc.vpc.id
-    cidr_block              = var.public_subnet_cidrs[count.index]
-    map_public_ip_on_launch = true
-    availability_zone       = var.a_zones[count.index]
-    tags = {
-      Name                  = "sub-rede-publica-busflow-${count.index + 1}"
-    }  
+  count                   = length(var.public_subnet_cidrs)
+  vpc_id                  = aws_vpc.vpc.id
+  cidr_block              = var.public_subnet_cidrs[count.index]
+  map_public_ip_on_launch = true
+  availability_zone       = var.a_zones[count.index]
+  tags = {
+    Name = "sub-rede-publica-busflow-${count.index + 1}"
+  }
 }
 
 /*==== sub-redes privadas ======*/
 resource "aws_subnet" "private_subnet" {
-    count                   = length(var.private_subnet_cidrs)
-    vpc_id                  = aws_vpc.vpc.id
-    cidr_block              = var.private_subnet_cidrs[count.index]
-    availability_zone       = var.a_zones[count.index]
-    tags = {
-      Name                  = "sub-rede-privada-busflow-${count.index + 1}"
-    }  
+  count             = length(var.private_subnet_cidrs)
+  vpc_id            = aws_vpc.vpc.id
+  cidr_block        = var.private_subnet_cidrs[count.index]
+  availability_zone = var.a_zones[count.index]
+  tags = {
+    Name = "sub-rede-privada-busflow-${count.index + 1}"
+  }
 }
 
 /*==== tabela de rota pública ====*/
 resource "aws_route_table" "public_rt" {
-    vpc_id                  = aws_vpc.vpc.id
-    route {
-      cidr_block            = "0.0.0.0/0"
-      gateway_id            = aws_internet_gateway.igw.id
-    }
-    tags = {
-      Name                  = "rt-public-busflow"
- }
+  vpc_id = aws_vpc.vpc.id
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.igw.id
+  }
+  tags = {
+    Name = "rt-public-busflow"
+  }
 }
 resource "aws_route_table_association" "public" {
-    count                   = length(aws_subnet.public_subnet)
-    route_table_id          = aws_route_table.public_rt.id
-    subnet_id               = aws_subnet.public_subnet[count.index].id
+  count          = length(aws_subnet.public_subnet)
+  route_table_id = aws_route_table.public_rt.id
+  subnet_id      = aws_subnet.public_subnet[count.index].id
 }
 
 /*==== tabela de rota privada ====*/
 resource "aws_route_table" "private_rt" {
-    vpc_id                  = aws_vpc.vpc.id
-    tags = {
-        Name                = "rt-private-busflow"
-    }
+  vpc_id = aws_vpc.vpc.id
+  tags = {
+    Name = "rt-private-busflow"
+  }
 }
 resource "aws_route_table_association" "private" {
-    count                   = length(aws_subnet.private_subnet)
-    route_table_id          = aws_route_table.private_rt.id
-    subnet_id               = aws_subnet.private_subnet[count.index].id
+  count          = length(aws_subnet.private_subnet)
+  route_table_id = aws_route_table.private_rt.id
+  subnet_id      = aws_subnet.private_subnet[count.index].id
 }
 
-/*==== criando ACL ====*/ 
+/*==== criando ACL ====*/
 resource "aws_network_acl" "acl_publica" {
-  vpc_id                    = aws_vpc.vpc.id
-  subnet_ids                = aws_subnet.public_subnet[*].id
+  vpc_id     = aws_vpc.vpc.id
+  subnet_ids = aws_subnet.public_subnet[*].id
   ingress { # permitindo SSH
-    protocol                = "tcp"
-    rule_no                 = 100
-    action                  = "allow"
-    cidr_block              = "0.0.0.0/0"
-    from_port               = 22
-    to_port                 = 22
+    protocol   = "tcp"
+    rule_no    = 100
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 22
+    to_port    = 22
   }
   ingress { # permitindo http
-    protocol                = "tcp"
-    rule_no                 = 200
-    action                  = "allow"
-    cidr_block              = "0.0.0.0/0"
-    from_port               = 80
-    to_port                 = 80
+    protocol   = "tcp"
+    rule_no    = 200
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 80
+    to_port    = 80
   }
   ingress { # permitindo https
-    protocol                = "tcp"
-    rule_no                 = 300
-    action                  = "allow"
-    cidr_block              = "0.0.0.0/0"
-    from_port               = 443
-    to_port                 = 443
+    protocol   = "tcp"
+    rule_no    = 300
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 443
+    to_port    = 443
   }
   ingress { # permitindo retorno de entrada internet
-    protocol                = "tcp"
-    rule_no                 = 400
-    action                  = "allow"
-    cidr_block              = "0.0.0.0/0"
-    from_port               = 32000
-    to_port                 = 65535
+    protocol   = "tcp"
+    rule_no    = 400
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 32000
+    to_port    = 65535
   }
   egress { # Permite saída para todo tráfego
-    protocol                = "-1"
-    rule_no                 = 100
-    action                  = "allow"
-    cidr_block              = "0.0.0.0/0"
-    from_port               = 0
-    to_port                 = 0
+    protocol   = "-1"
+    rule_no    = 100
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 0
+    to_port    = 0
   }
   ingress {
-  protocol    = "tcp"
-  rule_no     = 500
-  action      = "allow"
-  cidr_block  = "0.0.0.0/0"
-  from_port   = 8000
-  to_port     = 8000
-}
+    protocol   = "tcp"
+    rule_no    = 500
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 8000
+    to_port    = 8000
+  }
 
   tags = {
-    Name                    = "acl_publica_busflow"
+    Name = "acl_publica_busflow"
   }
 }
 
 resource "aws_network_acl" "acl_privada" {
-  vpc_id                    = aws_vpc.vpc.id
-  subnet_ids                = aws_subnet.private_subnet[*].id
+  vpc_id     = aws_vpc.vpc.id
+  subnet_ids = aws_subnet.private_subnet[*].id
   ingress {
-    protocol                = "tcp"
-    rule_no                 = 100
-    action                  = "allow"
-    cidr_block              = "10.0.0.0/25"
-    from_port               = 22
-    to_port                 = 22
+    protocol   = "tcp"
+    rule_no    = 100
+    action     = "allow"
+    cidr_block = "10.0.0.0/25"
+    from_port  = 22
+    to_port    = 22
   }
   ingress {
-    protocol                = "tcp"
-    rule_no                 = 200
-    action                  = "allow"
-    cidr_block              = "10.0.0.0/25"
-    from_port               = 80
-    to_port                 = 80
-  }  
-  ingress {
-    protocol                = "tcp"
-    rule_no                 = 300
-    action                  = "allow"
-    cidr_block              = "0.0.0.0/0"
-    from_port               = 32000
-    to_port                 = 65535
-  }
-  egress {
-    protocol                = "-1"
-    rule_no                 = 100
-    action                  = "allow"
-    cidr_block              = "0.0.0.0/0"
-    from_port               = 0
-    to_port                 = 0
+    protocol   = "tcp"
+    rule_no    = 200
+    action     = "allow"
+    cidr_block = "10.0.0.0/25"
+    from_port  = 80
+    to_port    = 80
   }
   ingress {
-    protocol    = "tcp"
-    rule_no     = 250
-    action      = "allow"
-    cidr_block  = "10.0.0.0/24" # ou o bloco da subnet pública
-    from_port   = 3306
-    to_port     = 3306
-  }
-  ingress {
-    protocol    = "tcp"
-    rule_no     = 260
-    action      = "allow"
-    cidr_block  = "10.0.0.0/24"
-    from_port   = 5432
-    to_port     = 5432
+    protocol   = "tcp"
+    rule_no    = 300
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 32000
+    to_port    = 65535
   }
   egress {
-    protocol    = "tcp"
-    rule_no     = 250
-    action      = "allow"
-    cidr_block  = "10.0.0.0/24"
-    from_port   = 3306
-    to_port     = 3306
+    protocol   = "-1"
+    rule_no    = 100
+    action     = "allow"
+    cidr_block = "0.0.0.0/0"
+    from_port  = 0
+    to_port    = 0
+  }
+  ingress {
+    protocol   = "tcp"
+    rule_no    = 250
+    action     = "allow"
+    cidr_block = "10.0.0.0/24" # ou o bloco da subnet pública
+    from_port  = 3306
+    to_port    = 3306
+  }
+  ingress {
+    protocol   = "tcp"
+    rule_no    = 260
+    action     = "allow"
+    cidr_block = "10.0.0.0/24"
+    from_port  = 5432
+    to_port    = 5432
+  }
+  egress {
+    protocol   = "tcp"
+    rule_no    = 250
+    action     = "allow"
+    cidr_block = "10.0.0.0/24"
+    from_port  = 3306
+    to_port    = 3306
   }
   tags = {
-    Name                    = "acl_privada"
+    Name = "acl_privada"
   }
 }
 
 /*==== Criando Security Group ====*/
 resource "aws_security_group" "sg" {
-  name                      = "basic_security"
-  description               = "Allow SSH/HTTP/HTTPS access"
-  vpc_id                    = aws_vpc.vpc.id
+  name        = "basic_security"
+  description = "Allow SSH/HTTP/HTTPS access"
+  vpc_id      = aws_vpc.vpc.id
   ingress {
-    from_port               = "22"
-    to_port                 = "22"
-    protocol                = "tcp"
-    cidr_blocks             = ["0.0.0.0/0"]
+    from_port   = "22"
+    to_port     = "22"
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
   }
   ingress {
-    from_port               = "80"
-    to_port                 = "80"
-    protocol                = "tcp"
-    cidr_blocks             = ["0.0.0.0/0"]
+    from_port   = "80"
+    to_port     = "80"
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
   }
   ingress {
-    from_port               = "443"
-    to_port                 = "443"
-    protocol                = "tcp"
-    cidr_blocks             = ["0.0.0.0/0"]
+    from_port   = "443"
+    to_port     = "443"
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
   }
   egress {
-    from_port               = 0
-    to_port                 = 0
-    protocol                = "-1"
-    cidr_blocks             = ["0.0.0.0/0"]
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
   }
   ingress {
-  from_port   = 8000
-  to_port     = 8000
-  protocol    = "tcp"
-  cidr_blocks = ["0.0.0.0/0"]
-}
+    from_port   = 8000
+    to_port     = 8000
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 }
 
 /*==== Criando Security Group Para EC2 Privada====*/
@@ -237,18 +237,18 @@ resource "aws_security_group" "mysql_sg" {
   vpc_id      = aws_vpc.vpc.id
 
   ingress {
-    from_port   = 3306
-    to_port     = 3306
-    protocol    = "tcp"
+    from_port = 3306
+    to_port   = 3306
+    protocol  = "tcp"
     # Liberando para o SG da EC2 pública:
     security_groups = [aws_security_group.sg.id]
   }
 
   ingress {
-    from_port               = "22"
-    to_port                 = "22"
-    protocol                = "tcp"
-    cidr_blocks             = ["0.0.0.0/0"]
+    from_port   = "22"
+    to_port     = "22"
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
@@ -261,16 +261,16 @@ resource "aws_security_group" "mysql_sg" {
 
 /*==== Outputs para exportar ====*/
 output "subnet_public_ids" {
-    value = aws_subnet.public_subnet[*].id
+  value = aws_subnet.public_subnet[*].id
 }
 output "subnet_private_ids" {
-    value = aws_subnet.private_subnet[*].id
+  value = aws_subnet.private_subnet[*].id
 }
 output "subnet_public_id" {
-    value = aws_subnet.public_subnet[0].id
+  value = aws_subnet.public_subnet[0].id
 }
 output "subnet_private_id" {
-    value = aws_subnet.private_subnet[0].id
+  value = aws_subnet.private_subnet[0].id
 }
 /*==== Gateway Endpoint para S3 ======*/
 resource "aws_vpc_endpoint" "s3_gateway" {
@@ -284,10 +284,10 @@ resource "aws_vpc_endpoint" "s3_gateway" {
   }
 }
 output "vpc_id" {
-    value = aws_vpc.vpc.id
+  value = aws_vpc.vpc.id
 }
 output "igw_id" {
-    value = aws_internet_gateway.igw.id
+  value = aws_internet_gateway.igw.id
 }
 output "sg_id" {
   value = aws_security_group.sg.id

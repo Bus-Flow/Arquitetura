@@ -14,14 +14,14 @@ locals {
 
 /*==== Lambda Ingestion Function (Tempo Real) ====*/
 resource "aws_lambda_function" "ingestion" {
-  function_name = local.lambda_ingestion_name
-  handler       = "ingestion.lambda_handler"
-  runtime       = "python3.9"
-  role          = data.aws_iam_role.lab_role.arn
-  filename      = "${path.module}/lambda_function/ingestion.zip"
+  function_name    = local.lambda_ingestion_name
+  handler          = "ingestion.lambda_handler"
+  runtime          = "python3.9"
+  role             = data.aws_iam_role.lab_role.arn
+  filename         = "${path.module}/lambda_function/ingestion.zip"
   source_code_hash = filebase64sha256("${path.module}/lambda_function/ingestion.zip")
-  timeout       = 120
-  memory_size   = 1024
+  timeout          = 120
+  memory_size      = 1024
 
   layers = [
     "arn:aws:lambda:us-east-1:336392948345:layer:AWSSDKPandas-Python39:28"
@@ -29,11 +29,11 @@ resource "aws_lambda_function" "ingestion" {
 
   environment {
     variables = {
-      BUCKET_RAW       = var.raw_name
-      SNS_TOPIC_ARN    = var.topic_arn
-      SPTRANS_TOKEN    = var.sptrans_token
-      OPENWEATHER_KEY  = var.openweather_key
-      HERE_API_KEY     = var.here_api_key
+      BUCKET_RAW      = var.raw_name
+      SNS_TOPIC_ARN   = var.topic_arn
+      SPTRANS_TOKEN   = var.sptrans_token
+      OPENWEATHER_KEY = var.openweather_key
+      HERE_API_KEY    = var.here_api_key
     }
   }
 
@@ -44,14 +44,14 @@ resource "aws_lambda_function" "ingestion" {
 
 /*==== Lambda Ingestion GTFS Function (Diária / 12h Inteligente) ====*/
 resource "aws_lambda_function" "ingestion_gtfs" {
-  function_name = local.lambda_ingestion_gtfs_name
-  handler       = "ingestion_gtfs.lambda_handler"
-  runtime       = "python3.9"
-  role          = data.aws_iam_role.lab_role.arn
-  filename      = "${path.module}/lambda_function/ingestion_gtfs.zip"
+  function_name    = local.lambda_ingestion_gtfs_name
+  handler          = "ingestion_gtfs.lambda_handler"
+  runtime          = "python3.9"
+  role             = data.aws_iam_role.lab_role.arn
+  filename         = "${path.module}/lambda_function/ingestion_gtfs.zip"
   source_code_hash = filebase64sha256("${path.module}/lambda_function/ingestion_gtfs.zip")
-  timeout       = 180
-  memory_size   = 512
+  timeout          = 180
+  memory_size      = 512
 
   layers = [
     "arn:aws:lambda:us-east-1:336392948345:layer:AWSSDKPandas-Python39:28"
@@ -73,14 +73,14 @@ resource "aws_lambda_function" "ingestion_gtfs" {
 
 /*==== Lambda ETL Function ====*/
 resource "aws_lambda_function" "etl" {
-  function_name = local.lambda_etl_name
-  handler       = "etl.lambda_handler"
-  runtime       = "python3.9"
-  role          = data.aws_iam_role.lab_role.arn
-  filename      = "${path.module}/lambda_function/etl.zip"
+  function_name    = local.lambda_etl_name
+  handler          = "etl.lambda_handler"
+  runtime          = "python3.9"
+  role             = data.aws_iam_role.lab_role.arn
+  filename         = "${path.module}/lambda_function/etl.zip"
   source_code_hash = filebase64sha256("${path.module}/lambda_function/etl.zip")
-  timeout       = 180
-  memory_size   = 1024
+  timeout          = 180
+  memory_size      = 1024
   vpc_config {
     subnet_ids         = var.private_subnet_ids
     security_group_ids = [var.lambda_sg_id]
@@ -126,25 +126,48 @@ resource "aws_s3_bucket_notification" "bucket_trigger" {
   depends_on = [aws_lambda_permission.allow_s3]
 }
 
-/*==== Gatilho EventBridge: Ingestão em Tempo Real (a cada 5 min) ====*/
-resource "aws_cloudwatch_event_rule" "schedule_realtime" {
-  name                = "busflow-schedule-realtime"
-  description         = "Dispara a ingestao de tempo real a cada 5 minutos"
-  schedule_expression = var.schedule_realtime_expression
+/*==== Gatilhos EventBridge: Ingestão em Tempo Real ====*/
+resource "aws_cloudwatch_event_rule" "schedule_realtime_off_peak" {
+  for_each            = var.schedule_realtime_off_peak_expressions
+  name                = "busflow-schedule-realtime-off-peak-${each.key}"
+  description         = "Dispara a ingestao de tempo real a cada 1 hora fora do pico, das 06h as 17h e das 19h as 22h (Brasilia)"
+  schedule_expression = each.value
 }
 
-resource "aws_cloudwatch_event_target" "target_realtime" {
-  rule      = aws_cloudwatch_event_rule.schedule_realtime.name
-  target_id = "IngestionRealtimeTarget"
+resource "aws_cloudwatch_event_target" "target_realtime_off_peak" {
+  for_each  = aws_cloudwatch_event_rule.schedule_realtime_off_peak
+  rule      = each.value.name
+  target_id = "IngestionRealtimeOffPeakTarget-${each.key}"
   arn       = aws_lambda_function.ingestion.arn
 }
 
-resource "aws_lambda_permission" "allow_eventbridge_realtime" {
-  statement_id  = "AllowEventBridgeRealtimeInvoke"
+resource "aws_lambda_permission" "allow_eventbridge_realtime_off_peak" {
+  for_each      = aws_cloudwatch_event_rule.schedule_realtime_off_peak
+  statement_id  = "AllowEventBridgeRealtimeOffPeak-${each.key}"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.ingestion.function_name
   principal     = "events.amazonaws.com"
-  source_arn    = aws_cloudwatch_event_rule.schedule_realtime.arn
+  source_arn    = each.value.arn
+}
+
+resource "aws_cloudwatch_event_rule" "schedule_realtime_peak" {
+  name                = "busflow-schedule-realtime-peak"
+  description         = "Dispara a ingestao de tempo real a cada 30 minutos das 17h as 19h (Brasilia)"
+  schedule_expression = var.schedule_realtime_peak_expression
+}
+
+resource "aws_cloudwatch_event_target" "target_realtime_peak" {
+  rule      = aws_cloudwatch_event_rule.schedule_realtime_peak.name
+  target_id = "IngestionRealtimePeakTarget"
+  arn       = aws_lambda_function.ingestion.arn
+}
+
+resource "aws_lambda_permission" "allow_eventbridge_realtime_peak" {
+  statement_id  = "AllowEventBridgeRealtimePeakInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.ingestion.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.schedule_realtime_peak.arn
 }
 
 /*==== Gatilho EventBridge: Ingestão GTFS (a cada 12 horas) ====*/
