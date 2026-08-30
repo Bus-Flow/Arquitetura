@@ -26,6 +26,11 @@ variable "rds_master_password" {
   description = "Senha master do banco RDS PostgreSQL"
   type        = string
   sensitive   = true
+
+  validation {
+    condition     = length(var.rds_master_password) >= 8
+    error_message = "rds_master_password deve ter pelo menos 8 caracteres."
+  }
 }
 
 variable "rds_database_name" {
@@ -74,10 +79,20 @@ variable "sptrans_password" {
 # ==============================================================================
 # Configurações de Agendamento (EventBridge Triggers)
 # ==============================================================================
-variable "schedule_realtime_expression" {
-  description = "Expressão de agendamento para a Ingestão em Tempo Real (ex: rate(5 minutes))"
+variable "schedule_realtime_off_peak_expressions" {
+  description = "Expressões EventBridge para ingestão em tempo real fora do pico, das 06h às 17h e das 19h às 22h (horário de Brasília)"
+  type = map(string)
+  default = {
+    morning = "cron(0 9-19 ? * * *)"
+    evening = "cron(0 22-23 ? * * *)"
+    late    = "cron(0 0-1 ? * * *)"
+  }
+}
+
+variable "schedule_realtime_peak_expression" {
+  description = "Expressão EventBridge para ingestão em tempo real no pico, das 17h às 19h (horário de Brasília)"
   type        = string
-  default     = "rate(5 minutes)"
+  default     = "cron(0/30 20-21 ? * * *)"
 }
 
 variable "schedule_gtfs_expression" {

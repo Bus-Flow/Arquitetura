@@ -69,10 +69,14 @@ variable "sptrans_password" {
   default     = ""
 }
 
-variable "schedule_realtime_expression" {
-  description = "Expressão de agendamento EventBridge Tempo Real"
+variable "schedule_realtime_off_peak_expressions" {
+  description = "Expressões EventBridge para ingestão em tempo real fora do pico"
+  type        = map(string)
+}
+
+variable "schedule_realtime_peak_expression" {
+  description = "Expressão EventBridge para ingestão em tempo real no pico"
   type        = string
-  default     = "rate(5 minutes)"
 }
 
 variable "schedule_gtfs_expression" {

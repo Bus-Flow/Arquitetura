@@ -4,12 +4,12 @@ data "aws_iam_role" "lab_role" {
 
 /*==== SageMaker Notebook Instance ====*/
 resource "aws_sagemaker_notebook_instance" "ml_notebook" {
-  name                            = "ml-notebook-busflow"
-  role_arn                        = data.aws_iam_role.lab_role.arn
-  instance_type                   = var.notebook_instance_type
-  subnet_id                       = var.private_subnet_id
-  security_groups                 = [aws_security_group.sagemaker_sg.id]
-  direct_internet_access          = "Enabled"
+  name                   = "ml-notebook-busflow"
+  role_arn               = data.aws_iam_role.lab_role.arn
+  instance_type          = var.notebook_instance_type
+  subnet_id              = var.private_subnet_id
+  security_groups        = [aws_security_group.sagemaker_sg.id]
+  direct_internet_access = "Enabled"
 
   tags = {
     Name = "ml-notebook-busflow"

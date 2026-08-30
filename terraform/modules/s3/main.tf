@@ -5,7 +5,7 @@ resource "random_id" "s3_suffix" {
 resource "aws_s3_bucket" "raw" {
   bucket        = "raw-busflow-${random_id.s3_suffix.hex}"
   force_destroy = true
-  
+
   tags = {
     Name = "raw-bucket-busflow"
   }
@@ -14,7 +14,7 @@ resource "aws_s3_bucket" "raw" {
 resource "aws_s3_bucket" "trusted" {
   bucket        = "trusted-busflow-${random_id.s3_suffix.hex}"
   force_destroy = true
-  
+
   tags = {
     Name = "trusted-bucket-busflow"
   }
