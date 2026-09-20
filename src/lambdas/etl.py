@@ -287,12 +287,155 @@ def carregar_referencias_gtfs(bucket_raw):
     except Exception as e:
         print(f"Aviso ao carregar GTFS: {e}. Utilizando parametros operacionais de referencia padrao.")
         
-    return referencias
+def inicializar_schema_se_necessario(cur):
+    """
+    Garante criacao automatica e idempotente das tabelas e views no PostgreSQL RDS.
+    Permite que o banco nasca pronto na primeira execucao sem comandos manuais.
+    """
+    ddl_init = """
+    CREATE TABLE IF NOT EXISTS dim_linha (
+        linha_codigo VARCHAR(20) NOT NULL,
+        sentido INT NOT NULL,
+        letreiro_origem VARCHAR(100),
+        letreiro_destino VARCHAR(100),
+        corredor_principal VARCHAR(100),
+        PRIMARY KEY (linha_codigo, sentido)
+    );
+
+    CREATE TABLE IF NOT EXISTS dim_linha_parada (
+        linha_codigo VARCHAR(20) NOT NULL,
+        sentido INT NOT NULL,
+        ponto_parada_seq INT NOT NULL,
+        nome_parada VARCHAR(150),
+        latitude FLOAT NOT NULL,
+        longitude FLOAT NOT NULL,
+        PRIMARY KEY (linha_codigo, sentido, ponto_parada_seq)
+    );
+
+    CREATE TABLE IF NOT EXISTS fato_linha_operacao (
+        id BIGSERIAL PRIMARY KEY,
+        timestamp_registro TIMESTAMP WITH TIME ZONE NOT NULL,
+        linha_codigo VARCHAR(20) NOT NULL,
+        sentido INT NOT NULL,
+        frota_ativa_real INT NOT NULL,
+        frota_necessaria_dfi INT NOT NULL,
+        frota_planejada INT NOT NULL,
+        headway_real_min FLOAT NOT NULL,
+        headway_planejado_min FLOAT NOT NULL,
+        aderencia_cronograma_pct FLOAT NOT NULL,
+        status_linha VARCHAR(30) NOT NULL,
+        iac_clima FLOAT,
+        gt_trafego FLOAT,
+        go_operacional FLOAT
+    );
+
+    CREATE TABLE IF NOT EXISTS fato_veiculo_posicao (
+        id BIGSERIAL PRIMARY KEY,
+        timestamp_coleta TIMESTAMP WITH TIME ZONE NOT NULL,
+        linha_codigo VARCHAR(20) NOT NULL,
+        sentido INT NOT NULL,
+        prefixo_carro VARCHAR(20) NOT NULL,
+        ponto_parada_seq INT NOT NULL,
+        latitude FLOAT,
+        longitude FLOAT,
+        status_carro VARCHAR(30) NOT NULL,
+        aderencia_individual FLOAT,
+        distancia_proximo_carro_km FLOAT
+    );
+
+    CREATE TABLE IF NOT EXISTS fato_previsao_ml (
+        id BIGSERIAL PRIMARY KEY,
+        timestamp_previsao TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        linha_codigo VARCHAR(20) NOT NULL,
+        sentido INT NOT NULL,
+        horizonte_minutos INT NOT NULL,
+        timestamp_alvo TIMESTAMP WITH TIME ZONE NOT NULL,
+        status_previsto VARCHAR(30) NOT NULL,
+        deficit_veiculos INT NOT NULL,
+        probabilidade_gargalo FLOAT NOT NULL,
+        acao_necessaria VARCHAR(255) NOT NULL,
+        justificativa VARCHAR(255) NOT NULL,
+        parada_inicio_gargalo INT,
+        parada_fim_gargalo INT,
+        alerta_ativo BOOLEAN DEFAULT TRUE,
+        versao_modelo VARCHAR(50) DEFAULT 'xgboost-busflow-v1'
+    );
+
+    CREATE TABLE IF NOT EXISTS fato_alerta (
+        id BIGSERIAL PRIMARY KEY,
+        timestamp_disparo TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        linha_codigo VARCHAR(20) NOT NULL,
+        sentido INT NOT NULL,
+        titulo VARCHAR(100) NOT NULL,
+        status_criticidade VARCHAR(30) NOT NULL,
+        deficit_sugerido INT NOT NULL,
+        mensagem_acao TEXT NOT NULL,
+        justificativa TEXT NOT NULL,
+        enviado_sns BOOLEAN DEFAULT FALSE,
+        sns_message_id VARCHAR(100)
+    );
+
+    CREATE OR REPLACE VIEW v_grafana_status_linhas AS
+    SELECT DISTINCT ON (op.linha_codigo, op.sentido)
+        op.linha_codigo,
+        op.sentido,
+        op.status_linha,
+        op.frota_ativa_real,
+        op.frota_necessaria_dfi,
+        op.aderencia_cronograma_pct,
+        op.headway_real_min,
+        op.headway_planejado_min,
+        op.timestamp_registro
+    FROM fato_linha_operacao op
+    ORDER BY op.linha_codigo, op.sentido, op.timestamp_registro DESC;
+
+    CREATE OR REPLACE VIEW v_grafana_circulacao_carros AS
+    SELECT DISTINCT ON (p.linha_codigo, p.sentido, p.prefixo_carro)
+        p.linha_codigo,
+        p.sentido,
+        p.prefixo_carro,
+        p.ponto_parada_seq,
+        p.status_carro,
+        p.aderencia_individual,
+        p.timestamp_coleta
+    FROM fato_veiculo_posicao p
+    ORDER BY p.linha_codigo, p.sentido, p.prefixo_carro, p.timestamp_coleta DESC;
+
+    CREATE OR REPLACE VIEW v_grafana_validacao_ml AS
+    SELECT 
+        ml.id AS predicao_id,
+        ml.linha_codigo,
+        ml.horizonte_minutos,
+        ml.timestamp_previsao,
+        ml.timestamp_alvo,
+        ml.status_previsto,
+        op.status_linha AS status_real_confirmado,
+        CASE 
+            WHEN ml.status_previsto = op.status_linha THEN 'ACERTO (TP)'
+            WHEN ml.status_previsto IN ('Gargalo', 'Risco de Gargalo') AND op.status_linha = 'Estabilizado' THEN 'FALSO ALARME (FP)'
+            WHEN ml.status_previsto = 'Estabilizado' AND op.status_linha IN ('Gargalo', 'Risco de Gargalo') THEN 'OMISSAO (FN)'
+            ELSE 'OUTRO'
+        END AS resultado_validacao,
+        ml.deficit_veiculos AS deficit_previsto,
+        (op.frota_necessaria_dfi - op.frota_ativa_real) AS deficit_real
+    FROM fato_previsao_ml ml
+    JOIN LATERAL (
+        SELECT o.status_linha, o.frota_necessaria_dfi, o.frota_ativa_real, o.timestamp_registro
+        FROM fato_linha_operacao o
+        WHERE o.linha_codigo = ml.linha_codigo 
+          AND o.sentido = ml.sentido
+          AND o.timestamp_registro >= ml.timestamp_alvo - INTERVAL '15 minutes'
+        ORDER BY ABS(EXTRACT(EPOCH FROM (o.timestamp_registro - ml.timestamp_alvo))) ASC
+        LIMIT 1
+    ) op ON true;
+    """
+    cur.execute(ddl_init)
 
 def persistir_rds(df_linhas, df_veiculos):
     """
     Persiste diretamente no PostgreSQL RDS (busflowdb) sem intermediarios.
     Tabelas: fato_linha_operacao e fato_veiculo_posicao
+    Suporta driver psycopg2 ou pg8000 (nativo da layer AWSSDKPandas).
     """
     db_host = os.environ.get('DB_HOST')
     if not db_host:
@@ -304,10 +447,11 @@ def persistir_rds(df_linhas, df_veiculos):
     db_password = os.environ.get('DB_PASSWORD', '')
     db_port = int(os.environ.get('DB_PORT', '5432'))
 
+    conn = None
+    driver = None
     try:
         import psycopg2
         from psycopg2.extras import execute_values
-        
         conn = psycopg2.connect(
             host=db_host,
             database=db_name,
@@ -316,18 +460,31 @@ def persistir_rds(df_linhas, df_veiculos):
             port=db_port,
             connect_timeout=5
         )
+        driver = 'psycopg2'
+    except ImportError:
+        try:
+            import pg8000.dbapi
+            conn = pg8000.dbapi.connect(
+                host=db_host,
+                database=db_name,
+                user=db_user,
+                password=db_password,
+                port=db_port,
+                timeout=5
+            )
+            driver = 'pg8000'
+        except ImportError:
+            print("Aviso: Nenhum driver postgresql (psycopg2 ou pg8000) encontrado no ambiente.")
+            return False
+
+    try:
         cur = conn.cursor()
+        
+        # 0. Garantir criacao idempotente do schema, tabelas e views no primeiro ciclo
+        inicializar_schema_se_necessario(cur)
 
         # 1. Inserir Linhas Operacionais
         if not df_linhas.empty:
-            sql_linhas = """
-                INSERT INTO fato_linha_operacao (
-                    timestamp_registro, linha_codigo, sentido, frota_ativa_real,
-                    frota_necessaria_dfi, frota_planejada, headway_real_min,
-                    headway_planejado_min, aderencia_cronograma_pct, status_linha,
-                    iac_clima, gt_trafego, go_operacional
-                ) VALUES %s
-            """
             valores_linhas = [
                 (
                     row['timestamp_processamento'], str(row['linha_codigo']), int(row['sentido']),
@@ -339,17 +496,29 @@ def persistir_rds(df_linhas, df_veiculos):
                 )
                 for _, row in df_linhas.iterrows()
             ]
-            execute_values(cur, sql_linhas, valores_linhas, page_size=1000)
+            if driver == 'psycopg2':
+                sql_linhas = """
+                    INSERT INTO fato_linha_operacao (
+                        timestamp_registro, linha_codigo, sentido, frota_ativa_real,
+                        frota_necessaria_dfi, frota_planejada, headway_real_min,
+                        headway_planejado_min, aderencia_cronograma_pct, status_linha,
+                        iac_clima, gt_trafego, go_operacional
+                    ) VALUES %s
+                """
+                execute_values(cur, sql_linhas, valores_linhas, page_size=1000)
+            else:
+                sql_linhas_pg = """
+                    INSERT INTO fato_linha_operacao (
+                        timestamp_registro, linha_codigo, sentido, frota_ativa_real,
+                        frota_necessaria_dfi, frota_planejada, headway_real_min,
+                        headway_planejado_min, aderencia_cronograma_pct, status_linha,
+                        iac_clima, gt_trafego, go_operacional
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """
+                cur.executemany(sql_linhas_pg, valores_linhas)
 
         # 2. Inserir Veiculos Individuais
         if not df_veiculos.empty:
-            sql_veiculos = """
-                INSERT INTO fato_veiculo_posicao (
-                    timestamp_coleta, linha_codigo, sentido, prefixo_carro,
-                    ponto_parada_seq, latitude, longitude, status_carro,
-                    aderencia_individual, distancia_proximo_carro_km
-                ) VALUES %s
-            """
             valores_veiculos = [
                 (
                     row['timestamp_coleta'], str(row['linha_codigo']), int(row['sentido']),
@@ -361,12 +530,29 @@ def persistir_rds(df_linhas, df_veiculos):
                 )
                 for _, row in df_veiculos.iterrows()
             ]
-            execute_values(cur, sql_veiculos, valores_veiculos, page_size=2000)
+            if driver == 'psycopg2':
+                sql_veiculos = """
+                    INSERT INTO fato_veiculo_posicao (
+                        timestamp_coleta, linha_codigo, sentido, prefixo_carro,
+                        ponto_parada_seq, latitude, longitude, status_carro,
+                        aderencia_individual, distancia_proximo_carro_km
+                    ) VALUES %s
+                """
+                execute_values(cur, sql_veiculos, valores_veiculos, page_size=2000)
+            else:
+                sql_veiculos_pg = """
+                    INSERT INTO fato_veiculo_posicao (
+                        timestamp_coleta, linha_codigo, sentido, prefixo_carro,
+                        ponto_parada_seq, latitude, longitude, status_carro,
+                        aderencia_individual, distancia_proximo_carro_km
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """
+                cur.executemany(sql_veiculos_pg, valores_veiculos)
 
         conn.commit()
         cur.close()
         conn.close()
-        print(f"Sucesso: {len(df_linhas)} linhas e {len(df_veiculos)} veiculos persistidos diretamente no RDS.")
+        print(f"Sucesso: {len(df_linhas)} linhas e {len(df_veiculos)} veiculos persistidos diretamente no RDS via {driver}.")
         return True
     except Exception as e:
         print(f"Aviso ao persistir no RDS (pipeline prossegue com S3): {e}")
