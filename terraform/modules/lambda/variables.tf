@@ -84,3 +84,35 @@ variable "schedule_gtfs_expression" {
   type        = string
   default     = "rate(12 hours)"
 }
+
+variable "db_host" {
+  description = "Host endpoint do RDS PostgreSQL"
+  type        = string
+  default     = ""
+}
+
+variable "db_name" {
+  description = "Nome do banco de dados no RDS"
+  type        = string
+  default     = "busflowdb"
+}
+
+variable "db_user" {
+  description = "Usuario do banco RDS"
+  type        = string
+  default     = "postgres"
+}
+
+variable "db_password" {
+  description = "Senha do banco RDS"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "db_port" {
+  description = "Porta do banco RDS"
+  type        = string
+  default     = "5432"
+}
+
