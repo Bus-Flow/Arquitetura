@@ -37,6 +37,18 @@ BusFlow/
 │   │   └── gtfs/                      # Arquivos GTFS SPTrans
 │   └── samples/                       # Datasets tratados (fato_operacao_exemplo.csv)
 │
+├── machine learning/                     # Modelos, experimentos e dados para machine learning
+│   ├── Analise_IA_BusFlow.pdf                  # Análise de Opções de IA para o Projeto BusFlow
+│   ├── Analise_Resultados_RF_BusFlow.pdf       # Análise dos Resultados da Validação do Random Forest
+│   ├── RF-Trusted-cod.ipynb                    # Notebook de treinamento e validação do modelo
+│   ├── predicoes_output_ml_busflow.md          # Resultados das predições
+│   ├── validacao_trusted_rf_busflow.md         # Validação do modelo com dados TRUSTED
+│   ├── Validacao_IA_BusFlow_RF_SageMaker.pdf   # Guia de validação de Random Forest e SageMaker com links para execução dos testes.
+│   └── busflow_dados_ficticios/                # Dados e script para geração do dataset fictício
+│       ├── gerar_dataset_busflow.py
+│       ├── dataset_consolidado.csv
+│       └── dataset_consolidado_v2.csv
+│
 ├── src/                               # Código-fonte Python da aplicação
 │   ├── lambdas/                       # Funções Lambda Serverless da AWS
 │   │   ├── ingestion_realtime.py      # Ingestão tempo real (SPTrans + OpenWeather)
