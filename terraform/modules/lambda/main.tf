@@ -135,7 +135,7 @@ resource "aws_s3_bucket_notification" "bucket_trigger" {
 resource "aws_cloudwatch_event_rule" "schedule_realtime_off_peak" {
   for_each            = var.schedule_realtime_off_peak_expressions
   name                = "busflow-schedule-realtime-off-peak-${each.key}"
-  description         = "Dispara a ingestao de tempo real a cada 1 hora fora do pico, das 06h as 17h e das 19h as 22h (Brasilia)"
+  description         = "Dispara a ingestao em tempo real fora do pico: 09h-11h com rotina normal, 12h-16h a cada 20 minutos, 22h-23h e 00h-01h com rotina normal (Brasilia)"
   schedule_expression = each.value
 }
 
@@ -157,7 +157,7 @@ resource "aws_lambda_permission" "allow_eventbridge_realtime_off_peak" {
 
 resource "aws_cloudwatch_event_rule" "schedule_realtime_peak" {
   name                = "busflow-schedule-realtime-peak"
-  description         = "Dispara a ingestao de tempo real a cada 30 minutos das 17h as 19h (Brasilia)"
+  description         = "Dispara a ingestao de tempo real a cada 10 minutos das 17h as 19h (Brasilia)"
   schedule_expression = var.schedule_realtime_peak_expression
 }
 

@@ -12,6 +12,61 @@ variable "email_list" {
   type        = list(string)
 }
 
+variable "ec2_ssh_allowed_cidr" {
+  description = "IP público autorizado a acessar SSH na EC2, no formato IPv4 /32"
+  type        = string
+
+  validation {
+    condition     = can(cidrnetmask(var.ec2_ssh_allowed_cidr)) && endswith(var.ec2_ssh_allowed_cidr, "/32")
+    error_message = "ec2_ssh_allowed_cidr deve conter o seu IP público no formato IPv4 /32."
+  }
+}
+
+variable "ec2_vpc_id" {
+  description = "VPC do Learner Lab; vazio usa a VPC padrão da região"
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.ec2_vpc_id == "" || var.ec2_subnet_id != ""
+    error_message = "Informe ec2_subnet_id junto com ec2_vpc_id para selecionar explicitamente uma subnet pública."
+  }
+}
+
+variable "ec2_subnet_id" {
+  description = "Subnet pública do Learner Lab; vazio seleciona uma subnet da VPC configurada"
+  type        = string
+  default     = ""
+}
+
+variable "ec2_iam_instance_profile_name" {
+  description = "Nome do perfil de instância IAM já fornecido pelo Learner Lab"
+  type        = string
+  default     = "LabInstanceProfile"
+}
+
+variable "ec2_instance_type" {
+  description = "Tipo da EC2; t3.small é o padrão, com t2.small e t3.medium como alternativas"
+  type        = string
+  default     = "t3.small"
+
+  validation {
+    condition     = contains(["t3.small", "t2.small", "t3.medium"], var.ec2_instance_type)
+    error_message = "ec2_instance_type deve ser t3.small, t2.small ou t3.medium."
+  }
+}
+
+variable "ec2_volume_size" {
+  description = "Tamanho do volume raiz gp3 da EC2, em GiB"
+  type        = number
+  default     = 20
+
+  validation {
+    condition     = var.ec2_volume_size >= 15 && var.ec2_volume_size <= 20
+    error_message = "ec2_volume_size deve estar entre 15 e 20 GiB."
+  }
+}
+
 # ==============================================================================
 # Variáveis do Banco de Dados (RDS PostgreSQL)
 # ==============================================================================
@@ -46,21 +101,19 @@ variable "sptrans_token" {
   description = "Token de autenticação na API Olho Vivo da SPTrans"
   type        = string
   sensitive   = true
-  default     = "07a60d55d2de72360de37d156be6824c972ecc0a95ec74e2bbba660c5c412d9d"
 }
 
 variable "openweather_key" {
   description = "API Key do serviço meteorológico OpenWeather"
   type        = string
   sensitive   = true
-  default     = "ff7cc980c0bc6823b91cbd0d1af58610"
 }
 
 variable "here_api_key" {
   description = "API Key do serviço de tráfego HERE (opcional/fallback ativo se vazio)"
   type        = string
   sensitive   = true
-  default     = "ddL58af4Y1mhBw2I_Br4GNGGPXywpKtxoCedVeozQGY"
+  default     = ""
 }
 
 variable "sptrans_username" {
@@ -73,26 +126,27 @@ variable "sptrans_password" {
   description = "Senha de login no portal de desenvolvedores da SPTrans"
   type        = string
   sensitive   = true
-  default     = "Fgandb25_#"
 }
 
 # ==============================================================================
 # Configurações de Agendamento (EventBridge Triggers)
 # ==============================================================================
 variable "schedule_realtime_off_peak_expressions" {
-  description = "Expressões EventBridge para ingestão em tempo real fora do pico, das 06h às 17h e das 19h às 22h (horário de Brasília)"
-  type = map(string)
+  description = "Expressões EventBridge para ingestão em tempo real fora do pico"
+  type        = map(string)
+
   default = {
-    morning = "cron(0 9-19 ? * * *)"
-    evening = "cron(0 22-23 ? * * *)"
-    late    = "cron(0 0-1 ? * * *)"
+    morning   = "cron(0 9-11 ? * * *)"
+    afternoon = "cron(0/20 12-16 ? * * *)"
+    evening   = "cron(0 22-23 ? * * *)"
+    late      = "cron(0 0-1 ? * * *)"
   }
 }
 
 variable "schedule_realtime_peak_expression" {
-  description = "Expressão EventBridge para ingestão em tempo real no pico, das 17h às 19h (horário de Brasília)"
+  description = "Expressão EventBridge para ingestão em tempo real no pico, das 17h às 19h, a cada 10 minutos"
   type        = string
-  default     = "cron(0/30 20-21 ? * * *)"
+  default     = "cron(0/10 17-19 ? * * *)"
 }
 
 variable "schedule_gtfs_expression" {

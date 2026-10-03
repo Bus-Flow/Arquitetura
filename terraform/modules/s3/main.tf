@@ -3,7 +3,7 @@ resource "random_id" "s3_suffix" {
 }
 
 resource "aws_s3_bucket" "raw" {
-  bucket        = "raw-busflow-${random_id.s3_suffix.hex}"
+  bucket        = "raw-busflow-2026-${random_id.s3_suffix.hex}"
   force_destroy = true
 
   tags = {
@@ -12,7 +12,7 @@ resource "aws_s3_bucket" "raw" {
 }
 
 resource "aws_s3_bucket" "trusted" {
-  bucket        = "trusted-busflow-${random_id.s3_suffix.hex}"
+  bucket        = "trusted-busflow-2026-${random_id.s3_suffix.hex}"
   force_destroy = true
 
   tags = {

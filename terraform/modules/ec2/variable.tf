@@ -1,7 +1,7 @@
 variable "ami" {
   type        = string
-  description = "Ubuntu Server 22.04 LTS"
-  default     = "ami-0e001c9271cf7f3b9"
+  description = "AMI override; vazio usa a AMI mais recente do Amazon Linux 2023 x86_64"
+  default     = ""
 }
 
 variable "a_zones" {
@@ -22,7 +22,7 @@ variable "instance_type_private" {
 
 variable "volume_size" {
   type    = number
-  default = 30
+  default = 20
 }
 
 variable "volume_type" {
@@ -33,4 +33,37 @@ variable "volume_type" {
 variable "key_pair_name" {
   type    = string
   default = "terraform_key"
+}
+
+variable "vpc_id" {
+  type        = string
+  description = "VPC do Learner Lab; vazio usa a VPC padrão da região"
+  default     = ""
+
+  validation {
+    condition     = var.vpc_id == "" || var.subnet_id != ""
+    error_message = "Informe subnet_id junto com vpc_id para selecionar explicitamente uma subnet pública."
+  }
+}
+
+variable "subnet_id" {
+  type        = string
+  description = "Subnet pública do Learner Lab; vazio seleciona uma subnet da VPC configurada"
+  default     = ""
+}
+
+variable "iam_instance_profile_name" {
+  type        = string
+  description = "Nome do perfil de instância IAM existente fornecido pelo Learner Lab"
+  default     = "LabInstanceProfile"
+}
+
+variable "ssh_allowed_cidr" {
+  type        = string
+  description = "IP público autorizado a acessar SSH, no formato IPv4 /32"
+
+  validation {
+    condition     = can(cidrnetmask(var.ssh_allowed_cidr)) && endswith(var.ssh_allowed_cidr, "/32")
+    error_message = "ssh_allowed_cidr deve conter o seu IP público no formato IPv4 /32."
+  }
 }

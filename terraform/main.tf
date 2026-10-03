@@ -2,7 +2,7 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 4.16"
+      version = "~> 5.0"
     }
     tls = {
       source  = "hashicorp/tls"
@@ -72,7 +72,13 @@ module "sagemaker" {
 }
 
 module "ec2" {
-  source = "./modules/ec2"
+  source                    = "./modules/ec2"
+  ssh_allowed_cidr          = var.ec2_ssh_allowed_cidr
+  vpc_id                    = var.ec2_vpc_id
+  subnet_id                 = var.ec2_subnet_id
+  iam_instance_profile_name = var.ec2_iam_instance_profile_name
+  instance_type_public      = var.ec2_instance_type
+  volume_size               = var.ec2_volume_size
 }
 
 
