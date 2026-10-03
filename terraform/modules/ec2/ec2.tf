@@ -78,6 +78,15 @@ resource "aws_instance" "ec2-web-app" {
     http_tokens   = "required"
   }
 
+  user_data = <<-EOF
+              #!/bin/bash
+              echo "=== Inicializando EC2 BusFlow (busflow-rf-ec2) ==="
+              dnf update -y
+              dnf install -y postgresql15 git python3-pip
+              pip3 install pandas numpy scikit-learn psycopg2-binary joblib boto3
+              echo "=== Ambiente de Machine Learning configurado com sucesso! ==="
+              EOF
+
   tags = {
     Name = "busflow-rf-ec2"
   }

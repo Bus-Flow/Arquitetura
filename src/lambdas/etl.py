@@ -431,10 +431,10 @@ def inicializar_schema_se_necessario(cur):
     """
     cur.execute(ddl_init)
 
-def persistir_rds(df_linhas, df_veiculos):
+def persistir_rds(df_linhas, df_veiculos, inicio_proc=None, duracao_segundos=None, sucesso=True):
     """
     Persiste diretamente no PostgreSQL RDS (busflowdb) sem intermediarios.
-    Tabelas: fato_linha_operacao e fato_veiculo_posicao
+    Tabelas: fato_linha_operacao, fato_veiculo_posicao e fato_auditoria_pipeline.
     Suporta driver psycopg2 ou pg8000 (nativo da layer AWSSDKPandas).
     """
     db_host = os.environ.get('DB_HOST')
@@ -479,9 +479,6 @@ def persistir_rds(df_linhas, df_veiculos):
 
     try:
         cur = conn.cursor()
-        
-        # 0. Garantir criacao idempotente do schema, tabelas e views no primeiro ciclo
-        inicializar_schema_se_necessario(cur)
 
         # 1. Inserir Linhas Operacionais
         if not df_linhas.empty:
@@ -549,14 +546,36 @@ def persistir_rds(df_linhas, df_veiculos):
                 """
                 cur.executemany(sql_veiculos_pg, valores_veiculos)
 
+        # 3. Inserir Log de Auditoria Contínua (fato_auditoria_pipeline)
+        if inicio_proc:
+            duracao_efetiva = duracao_segundos if duracao_segundos is not None else 0.0
+            cumpre_sla = duracao_efetiva <= 60.0
+            sql_audit = """
+                INSERT INTO fato_auditoria_pipeline (
+                    componente, timestamp_inicio, timestamp_fim, duracao_segundos,
+                    linhas_processadas, status_execucao, cumpre_sla, mensagem_detalhe
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            cur.execute(sql_audit, (
+                'lambda-etl',
+                inicio_proc,
+                datetime.utcnow(),
+                round(duracao_efetiva, 2),
+                len(df_linhas),
+                'SUCESSO' if sucesso else 'FALHA',
+                cumpre_sla,
+                f"Executado via driver {driver}."
+            ))
+
         conn.commit()
         cur.close()
         conn.close()
-        print(f"Sucesso: {len(df_linhas)} linhas e {len(df_veiculos)} veiculos persistidos diretamente no RDS via {driver}.")
+        print(f"Sucesso: {len(df_linhas)} linhas, {len(df_veiculos)} veiculos e log de auditoria persistidos no RDS via {driver}.")
         return True
     except Exception as e:
         print(f"Aviso ao persistir no RDS (pipeline prossegue com S3): {e}")
         return False
+
 
 def lambda_handler(event, context):
     """
@@ -564,6 +583,7 @@ def lambda_handler(event, context):
     Processa o payload do RAW, cruza com inteligencia espacial HERE (cKDTree + IDW),
     calcula indices operacionais por linha e por veiculo, gravando no S3 TRUSTED e no RDS PostgreSQL.
     """
+    inicio_execucao = datetime.utcnow()
     try:
         bucket_raw = os.environ['BUCKET_RAW']
         bucket_trusted = os.environ['BUCKET_TRUSTED']
@@ -771,8 +791,9 @@ def lambda_handler(event, context):
             
         print(f"Sucesso: {len(df_trusted)} linhas e {len(df_veiculos)} veiculos gravados no S3 TRUSTED.")
         
-        # 6. Persistir diretamente no RDS PostgreSQL (Fonte da Verdade)
-        persistir_rds(df_trusted, df_veiculos)
+        # 6. Persistir diretamente no RDS PostgreSQL (Fonte da Verdade) com Auditoria
+        duracao_total = (datetime.utcnow() - inicio_execucao).total_seconds()
+        persistir_rds(df_trusted, df_veiculos, inicio_proc=inicio_execucao, duracao_segundos=duracao_total, sucesso=True)
         
         # 7. Notificar via SNS se houver linhas criticas
         if alertas_risco and topic_arn:
@@ -789,13 +810,19 @@ def lambda_handler(event, context):
                 'mensagem': 'ETL executado com sucesso',
                 'linhas_processadas': len(df_trusted),
                 'veiculos_processados': len(df_veiculos),
+                'duracao_segundos': round(duracao_total, 2),
                 'trusted_key': trusted_key_linhas,
                 'alertas_gerados': len(alertas_risco)
             })
         }
         
     except Exception as e:
-        print(f"Erro critico no ETL: {str(e)}")
+        duracao_erro = (datetime.utcnow() - inicio_execucao).total_seconds() if 'inicio_execucao' in locals() else 0.0
+        print(f"Erro critico no ETL ({duracao_erro:.2f}s): {str(e)}")
+        try:
+            persistir_rds(pd.DataFrame(), pd.DataFrame(), inicio_proc=inicio_execucao, duracao_segundos=duracao_erro, sucesso=False)
+        except:
+            pass
         if topic_arn:
             try:
                 sns.publish(
@@ -807,5 +834,5 @@ def lambda_handler(event, context):
                 pass
         return {
             'statusCode': 500,
-            'body': json.dumps({'erro': str(e)})
+            'body': json.dumps({'erro': str(e), 'duracao_segundos': round(duracao_erro, 2)})
         }

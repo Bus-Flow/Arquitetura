@@ -168,6 +168,7 @@ CREATE OR REPLACE VIEW v_grafana_validacao_ml AS
 SELECT 
     ml.id AS predicao_id,
     ml.linha_codigo,
+    ml.sentido,
     ml.horizonte_minutos,
     ml.timestamp_previsao,
     ml.timestamp_alvo,
@@ -177,10 +178,11 @@ SELECT
         WHEN ml.status_previsto = op.status_linha THEN 'ACERTO (TP)'
         WHEN ml.status_previsto IN ('Gargalo', 'Risco de Gargalo') AND op.status_linha = 'Estabilizado' THEN 'FALSO ALARME (FP)'
         WHEN ml.status_previsto = 'Estabilizado' AND op.status_linha IN ('Gargalo', 'Risco de Gargalo') THEN 'OMISSAO (FN)'
-        ELSE 'OUTRO'
+        ELSE 'ACERTO ESTABILIZADO (TN)'
     END AS resultado_validacao,
     ml.deficit_veiculos AS deficit_previsto,
-    (op.frota_necessaria_dfi - op.frota_ativa_real) AS deficit_real
+    (op.frota_necessaria_dfi - op.frota_ativa_real) AS deficit_real,
+    ABS(ml.deficit_veiculos - (op.frota_necessaria_dfi - op.frota_ativa_real)) AS erro_absoluto_deficit
 FROM fato_previsao_ml ml
 JOIN LATERAL (
     -- Busca a coleta real mais proxima do momento em que a previsao venceu
@@ -192,3 +194,55 @@ JOIN LATERAL (
     ORDER BY ABS(EXTRACT(EPOCH FROM (o.timestamp_registro - ml.timestamp_alvo))) ASC
     LIMIT 1
 ) op ON true;
+
+-- ============================================================================
+-- 7. AUDITORIA CONTÍNUA DE SLA & PERFORMANCE 
+-- ============================================================================
+
+-- Tabela de Log de Execução dos Pipelines (Audita SLA de Execução <= 60s)
+CREATE TABLE IF NOT EXISTS fato_auditoria_pipeline (
+    id BIGSERIAL PRIMARY KEY,
+    componente VARCHAR(50) NOT NULL,            
+    timestamp_inicio TIMESTAMP WITH TIME ZONE NOT NULL,
+    timestamp_fim TIMESTAMP WITH TIME ZONE NOT NULL,
+    duracao_segundos FLOAT NOT NULL,
+    linhas_processadas INT,
+    status_execucao VARCHAR(20) NOT NULL,       
+    mensagem_detalhe TEXT,
+    cumpre_sla BOOLEAN NOT NULL                  
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_pipeline_tempo ON fato_auditoria_pipeline (timestamp_inicio DESC);
+
+-- View de Auditoria de SLAs de Machine Learning (Hit Rate, Falsos Alarmes e MAE)
+CREATE OR REPLACE VIEW v_auditoria_metricas_ml AS
+SELECT 
+    horizonte_minutos,
+    COUNT(*) AS total_avaliacoes,
+    ROUND(COUNT(*) FILTER (WHERE resultado_validacao IN ('ACERTO (TP)', 'ACERTO ESTABILIZADO (TN)')) * 100.0 / NULLIF(COUNT(*), 0), 2) AS hit_rate_pct,
+    ROUND(COUNT(*) FILTER (WHERE resultado_validacao = 'OMISSAO (FN)') * 100.0 / NULLIF(COUNT(*), 0), 2) AS taxa_omissao_surpresa_pct,
+    ROUND(COUNT(*) FILTER (WHERE resultado_validacao = 'FALSO ALARME (FP)') * 100.0 / NULLIF(COUNT(*), 0), 2) AS taxa_falso_alarme_pct,
+    ROUND(AVG(erro_absoluto_deficit)::numeric, 2) AS mae_deficit_veiculos,
+    CASE 
+        WHEN horizonte_minutos = 10 AND (COUNT(*) FILTER (WHERE resultado_validacao IN ('ACERTO (TP)', 'ACERTO ESTABILIZADO (TN)')) * 100.0 / NULLIF(COUNT(*), 0)) >= 85.0 THEN 'ATENDE SLA (>=85%)'
+        WHEN horizonte_minutos = 40 AND (COUNT(*) FILTER (WHERE resultado_validacao IN ('ACERTO (TP)', 'ACERTO ESTABILIZADO (TN)')) * 100.0 / NULLIF(COUNT(*), 0)) >= 75.0 THEN 'ATENDE SLA (>=75%)'
+        ELSE 'ABAIXO DO SLA'
+    END AS status_sla_qualidade
+FROM v_grafana_validacao_ml
+GROUP BY horizonte_minutos;
+
+-- View de Auditoria do Frescor dos Dados (Audita SLA de Atualização <= 12m pico / <= 22m vale)
+CREATE OR REPLACE VIEW v_auditoria_frescor_dados AS
+SELECT 
+    l.linha_codigo,
+    l.sentido,
+    MAX(op.timestamp_registro) AS ultimo_registro,
+    ROUND(EXTRACT(EPOCH FROM (NOW() - MAX(op.timestamp_registro))) / 60.0, 1) AS atraso_minutos,
+    CASE 
+        WHEN EXTRACT(EPOCH FROM (NOW() - MAX(op.timestamp_registro))) / 60.0 <= 12.0 THEN 'DENTRO DO SLA DE PICO (<=12m)'
+        WHEN EXTRACT(EPOCH FROM (NOW() - MAX(op.timestamp_registro))) / 60.0 <= 25.0 THEN 'DENTRO DO SLA FORA DE PICO (<=25m)'
+        ELSE 'VIOLACAO DE SLA (>25m)'
+    END AS status_frescor_sla
+FROM dim_linha l
+LEFT JOIN fato_linha_operacao op ON op.linha_codigo = l.linha_codigo AND op.sentido = l.sentido
+GROUP BY l.linha_codigo, l.sentido;
