@@ -33,7 +33,7 @@ module "rds" {
   vpc_id             = module.net.vpc_id
   private_subnet_ids = module.net.subnet_private_ids
   lambda_sg_id       = module.net.lambda_sg_id
-  ec2_sg_id          = module.net.sg_id
+  ec2_sg_id          = module.ec2.security_group_id
   sagemaker_sg_id    = module.sagemaker.sagemaker_sg_id
   master_password    = var.rds_master_password
 }
@@ -74,8 +74,8 @@ module "sagemaker" {
 module "ec2" {
   source                    = "./modules/ec2"
   ssh_allowed_cidr          = var.ec2_ssh_allowed_cidr
-  vpc_id                    = var.ec2_vpc_id
-  subnet_id                 = var.ec2_subnet_id
+  vpc_id                    = var.ec2_vpc_id != "" ? var.ec2_vpc_id : module.net.vpc_id
+  subnet_id                 = var.ec2_subnet_id != "" ? var.ec2_subnet_id : module.net.subnet_public_id
   iam_instance_profile_name = var.ec2_iam_instance_profile_name
   instance_type_public      = var.ec2_instance_type
   volume_size               = var.ec2_volume_size
