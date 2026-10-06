@@ -286,6 +286,8 @@ def carregar_referencias_gtfs(bucket_raw):
                     }
     except Exception as e:
         print(f"Aviso ao carregar GTFS: {e}. Utilizando parametros operacionais de referencia padrao.")
+
+    return referencias
         
 def inicializar_schema_se_necessario(cur):
     """

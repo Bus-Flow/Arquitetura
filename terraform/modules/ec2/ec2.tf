@@ -1,29 +1,3 @@
-data "aws_vpc" "default" {
-  count   = var.vpc_id == "" && var.subnet_id == "" ? 1 : 0
-  default = true
-}
-
-data "aws_subnet" "selected" {
-  count = var.subnet_id == "" ? 0 : 1
-  id    = var.subnet_id
-}
-
-locals {
-  selected_vpc_id = var.vpc_id != "" ? var.vpc_id : (
-    var.subnet_id != "" ? data.aws_subnet.selected[0].vpc_id : data.aws_vpc.default[0].id
-  )
-  selected_subnet_id = var.subnet_id != "" ? var.subnet_id : data.aws_subnets.public[0].ids[0]
-}
-
-data "aws_subnets" "public" {
-  count = var.subnet_id == "" ? 1 : 0
-
-  filter {
-    name   = "vpc-id"
-    values = [local.selected_vpc_id]
-  }
-}
-
 data "aws_ssm_parameter" "al2023_ami" {
   count = var.ami == "" ? 1 : 0
   name  = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
@@ -42,7 +16,7 @@ resource "aws_key_pair" "generated_key" {
 resource "aws_security_group" "ec2_ssh" {
   name        = "busflow-rf-ec2-ssh"
   description = "SSH access to the BusFlow RF EC2 from the configured IP"
-  vpc_id      = local.selected_vpc_id
+  vpc_id      = var.vpc_id
 
   ingress {
     from_port   = 22
@@ -63,7 +37,7 @@ resource "aws_instance" "ec2-web-app" {
   ami                         = var.ami != "" ? var.ami : data.aws_ssm_parameter.al2023_ami[0].value
   instance_type               = var.instance_type_public
   key_name                    = aws_key_pair.generated_key.key_name
-  subnet_id                   = local.selected_subnet_id
+  subnet_id                   = var.subnet_id
   associate_public_ip_address = true
   vpc_security_group_ids      = [aws_security_group.ec2_ssh.id]
   iam_instance_profile        = var.iam_instance_profile_name
