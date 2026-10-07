@@ -1,0 +1,1 @@
+{"statusCode": 200, "body": "{\"mensagem\": \"ETL executado com sucesso\", \"linhas_processadas\": 2041, \"veiculos_processados\": 9514, \"duracao_segundos\": 37.74, \"trusted_key\": \"fato_operacao_frota/ano=2026/mes=10/dia=07/fato_operacao_20261007_200216.csv\", \"alertas_gerados\": 0}"}

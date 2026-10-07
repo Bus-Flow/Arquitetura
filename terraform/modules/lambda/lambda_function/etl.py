@@ -33,7 +33,7 @@ def classificar_horario_pico(hora_min):
     try:
         hora, minuto = map(int, hora_min.split(':'))
         minutos_totais = hora * 60 + minuto
-        
+
         # Pico Manha (06:30 as 09:00) e Pico Tarde (17:00 as 20:00)
         if (390 <= minutos_totais <= 540) or (1020 <= minutos_totais <= 1200):
             return 0.8, "Pico"
@@ -55,19 +55,19 @@ def calcular_indice_climatico(clima_raw):
     wind = clima_raw.get('wind', {})
     rain = clima_raw.get('rain', {})
     weather = clima_raw.get('weather', [{}])[0]
-    
+
     # 1. Chuva (0 a 100): 0 mm = 0, >= 20 mm/h = 100
     rain_mm = rain.get('1h', 0.0) if isinstance(rain, dict) else 0.0
     sev_chuva = min(100.0, (rain_mm / 15.0) * 100.0)
-    
+
     # 2. Visibilidade (0 a 100): 10.000m = 0, <= 1.000m = 100
     visib_m = clima_raw.get('visibility', 10000)
     sev_visib = max(0.0, min(100.0, (1.0 - (visib_m / 10000.0)) * 100.0))
-    
+
     # 3. Vento (0 a 100): 0 m/s = 0, >= 20 m/s = 100
     wind_speed = wind.get('speed', 0.0)
     sev_vento = min(100.0, (wind_speed / 20.0) * 100.0)
-    
+
     # 4. Desconforto Termico (feels_like): Ideal 22°C.
     feels_like = main.get('feels_like', 22.0)
     temp_c = main.get('temp', 22.0)
@@ -79,7 +79,7 @@ def calcular_indice_climatico(clima_raw):
         sev_temp = 30.0
     else:
         sev_temp = 10.0
-        
+
     # 5. Evento Climatico (codigo weather.id)
     weather_id = weather.get('id', 800)
     if weather_id < 300: # Tempestade
@@ -92,7 +92,7 @@ def calcular_indice_climatico(clima_raw):
         sev_evento = 50.0
     else:
         sev_evento = 10.0
-        
+
     iac = (sev_chuva * 0.35) + (sev_visib * 0.20) + (sev_vento * 0.20) + (sev_temp * 0.15) + (sev_evento * 0.10)
     return round(iac, 2), {
         'temp_c': temp_c,
@@ -115,7 +115,7 @@ class IndexadorEspacialTrafego:
         self.tree_incidentes = None
         self.coords_trechos = []
         self.coords_incidentes = []
-        
+
         self._construir_indices(trafego_raw)
 
     def _construir_indices(self, trafego_raw):
@@ -123,7 +123,7 @@ class IndexadorEspacialTrafego:
         dados_trafego = trafego_raw.get('trafego', {}).get('trechos', [])
         validos_trechos = []
         coords_tr = []
-        
+
         for t in dados_trafego:
             lat = t.get('lat')
             lng = t.get('lng')
@@ -133,18 +133,18 @@ class IndexadorEspacialTrafego:
                 x = lng * KM_PER_DEGREE_LNG
                 coords_tr.append([y, x])
                 validos_trechos.append(t)
-                
+
         self.trechos = validos_trechos
         if coords_tr:
             self.coords_trechos = np.array(coords_tr)
             if HAS_SCIPY:
                 self.tree_trechos = cKDTree(self.coords_trechos)
-                
+
         # 2. Incidentes de trafego
         dados_incidentes = trafego_raw.get('incidentes', {}).get('incidentes', [])
         validos_inc = []
         coords_inc = []
-        
+
         for inc in dados_incidentes:
             lat = inc.get('lat')
             lng = inc.get('lng')
@@ -153,7 +153,7 @@ class IndexadorEspacialTrafego:
                 x = lng * KM_PER_DEGREE_LNG
                 coords_inc.append([y, x])
                 validos_inc.append(inc)
-                
+
         self.incidentes = validos_inc
         if coords_inc:
             self.coords_incidentes = np.array(coords_inc)
@@ -167,29 +167,29 @@ class IndexadorEspacialTrafego:
         """
         if not veiculos or not self.trechos or self.tree_trechos is None:
             return self._retorno_padrao()
-            
+
         coords_onibus = []
         for v in veiculos:
             lat = v.get('py')
             lng = v.get('px')
             if lat is not None and lng is not None:
                 coords_onibus.append([lat * KM_PER_DEGREE_LAT, lng * KM_PER_DEGREE_LNG])
-                
+
         if not coords_onibus:
             return self._retorno_padrao()
-            
+
         # Busca espacial no raio de 1 km para todos os onibus da linha
         vizinhos_por_onibus = self.tree_trechos.query_ball_point(coords_onibus, r=RAIO_BUSCA_KM)
-        
+
         indices_trechos_encontrados = set()
         pesos_totais = []
         jam_fatores = []
         speeds = []
         free_flows = []
-        
+
         epsilon = 0.01 # 10 metros para evitar divisao por zero
         power = 2      # Decaimento quadratico IDW (1 / d^2)
-        
+
         for i, idx_list in enumerate(vizinhos_por_onibus):
             if not idx_list:
                 continue
@@ -198,23 +198,23 @@ class IndexadorEspacialTrafego:
                 indices_trechos_encontrados.add(idx_tr)
                 ponto_tr = self.coords_trechos[idx_tr]
                 dist_km = math.sqrt((ponto_onibus[0] - ponto_tr[0])**2 + (ponto_onibus[1] - ponto_tr[1])**2)
-                
+
                 peso = 1.0 / ((dist_km + epsilon) ** power)
                 tr = self.trechos[idx_tr]
-                
+
                 pesos_totais.append(peso)
                 jam_fatores.append(tr.get('jamFactor', 3.0) * peso)
                 speeds.append((tr.get('speed') or 20.0) * peso)
                 free_flows.append((tr.get('freeFlow') or 40.0) * peso)
-                
+
         if not pesos_totais or sum(pesos_totais) == 0:
             return self._retorno_padrao()
-            
+
         soma_pesos = sum(pesos_totais)
         jam_ponderado = round(sum(jam_fatores) / soma_pesos, 2)
         speed_ponderado = round(sum(speeds) / soma_pesos, 2)
         free_flow_ponderado = round(sum(free_flows) / soma_pesos, 2)
-        
+
         # Detecao de incidentes criticos interceptando o trajeto da linha
         incidente_critico = 0
         if self.tree_incidentes is not None and len(self.coords_incidentes) > 0:
@@ -227,15 +227,15 @@ class IndexadorEspacialTrafego:
                         break
                 if incidente_critico == 1:
                     break
-                    
+
         # Calculo do Sub-indice de Trafego (GT / IIV: 0 a 100)
         # IIV = (0.70 * FLOW) + (0.25 * INC) + (0.05 * TEND)
         flow_score = min(100.0, jam_ponderado * 10.0)
         inc_score = 100.0 if incidente_critico == 1 else 0.0
         tend_score = 50.0
-        
+
         gt_score = round((0.70 * flow_score) + (0.25 * inc_score) + (0.05 * tend_score), 2)
-        
+
         return {
             'jam_factor': jam_ponderado,
             'speed_kmh': speed_ponderado,
@@ -243,7 +243,7 @@ class IndexadorEspacialTrafego:
             'incidente_critico': incidente_critico,
             'gt_score': gt_score
         }
-        
+
     def _retorno_padrao(self):
         return {
             'jam_factor': 3.0,
@@ -266,15 +266,15 @@ def carregar_referencias_gtfs(bucket_raw):
                 df_freq = pd.read_csv(z.open('frequencies.txt'))
                 headway_medio = df_freq['headway_secs'].median() / 60.0 if not df_freq.empty else 10.0
                 referencias['headway_padrao_min'] = headway_medio
-                
+
             if 'stops.txt' in z.namelist() and 'stop_times.txt' in z.namelist() and 'trips.txt' in z.namelist():
-                df_stops = pd.read_csv(z.open('stops.txt'), usecols=['stop_id', 'stop_lat', 'stop_lon'])
+                df_stops = pd.read_csv(z.open('stops.txt'), usecols=['stop_id', 'stop_name', 'stop_lat', 'stop_lon'])
                 df_st = pd.read_csv(z.open('stop_times.txt'), usecols=['trip_id', 'stop_id', 'stop_sequence'])
                 df_trips = pd.read_csv(z.open('trips.txt'), usecols=['trip_id', 'route_id', 'direction_id'])
-                
+
                 df_merged = df_trips.merge(df_st, on='trip_id').merge(df_stops, on='stop_id')
                 df_unique = df_merged.drop_duplicates(subset=['route_id', 'direction_id', 'stop_sequence']).sort_values('stop_sequence')
-                
+
                 for (r_id, d_id), group in df_unique.groupby(['route_id', 'direction_id']):
                     coords = group[['stop_lat', 'stop_lon']].values
                     seqs = group['stop_sequence'].values
@@ -282,13 +282,22 @@ def carregar_referencias_gtfs(bucket_raw):
                         'coords': coords,
                         'seqs': seqs,
                         'total_paradas': len(seqs),
+                        'paradas': [
+                            {
+                                'ponto_parada_seq': int(row.stop_sequence),
+                                'nome_parada': str(row.stop_name) if pd.notna(row.stop_name) else None,
+                                'latitude': float(row.stop_lat),
+                                'longitude': float(row.stop_lon)
+                            }
+                            for row in group.itertuples(index=False)
+                        ],
                         'tree': cKDTree(coords * np.array([KM_PER_DEGREE_LAT, KM_PER_DEGREE_LNG])) if HAS_SCIPY and len(coords) > 0 else None
                     }
     except Exception as e:
         print(f"Aviso ao carregar GTFS: {e}. Utilizando parametros operacionais de referencia padrao.")
 
     return referencias
-        
+
 def inicializar_schema_se_necessario(cur):
     """
     Garante criacao automatica e idempotente das tabelas e views no PostgreSQL RDS.
@@ -377,66 +386,25 @@ def inicializar_schema_se_necessario(cur):
         sns_message_id VARCHAR(100)
     );
 
-    CREATE OR REPLACE VIEW v_grafana_status_linhas AS
-    SELECT DISTINCT ON (op.linha_codigo, op.sentido)
-        op.linha_codigo,
-        op.sentido,
-        op.status_linha,
-        op.frota_ativa_real,
-        op.frota_necessaria_dfi,
-        op.aderencia_cronograma_pct,
-        op.headway_real_min,
-        op.headway_planejado_min,
-        op.timestamp_registro
-    FROM fato_linha_operacao op
-    ORDER BY op.linha_codigo, op.sentido, op.timestamp_registro DESC;
+    CREATE TABLE IF NOT EXISTS fato_auditoria_pipeline (
+        id BIGSERIAL PRIMARY KEY,
+        componente VARCHAR(50) NOT NULL,
+        timestamp_inicio TIMESTAMP WITH TIME ZONE NOT NULL,
+        timestamp_fim TIMESTAMP WITH TIME ZONE NOT NULL,
+        duracao_segundos FLOAT NOT NULL,
+        linhas_processadas INT NOT NULL DEFAULT 0,
+        status_execucao VARCHAR(20) NOT NULL,
+        cumpre_sla BOOLEAN NOT NULL,
+        mensagem_detalhe TEXT
+    );
 
-    CREATE OR REPLACE VIEW v_grafana_circulacao_carros AS
-    SELECT DISTINCT ON (p.linha_codigo, p.sentido, p.prefixo_carro)
-        p.linha_codigo,
-        p.sentido,
-        p.prefixo_carro,
-        p.ponto_parada_seq,
-        p.status_carro,
-        p.aderencia_individual,
-        p.timestamp_coleta
-    FROM fato_veiculo_posicao p
-    ORDER BY p.linha_codigo, p.sentido, p.prefixo_carro, p.timestamp_coleta DESC;
-
-    CREATE OR REPLACE VIEW v_grafana_validacao_ml AS
-    SELECT 
-        ml.id AS predicao_id,
-        ml.linha_codigo,
-        ml.horizonte_minutos,
-        ml.timestamp_previsao,
-        ml.timestamp_alvo,
-        ml.status_previsto,
-        op.status_linha AS status_real_confirmado,
-        CASE 
-            WHEN ml.status_previsto = op.status_linha THEN 'ACERTO (TP)'
-            WHEN ml.status_previsto IN ('Gargalo', 'Risco de Gargalo') AND op.status_linha = 'Estabilizado' THEN 'FALSO ALARME (FP)'
-            WHEN ml.status_previsto = 'Estabilizado' AND op.status_linha IN ('Gargalo', 'Risco de Gargalo') THEN 'OMISSAO (FN)'
-            ELSE 'OUTRO'
-        END AS resultado_validacao,
-        ml.deficit_veiculos AS deficit_previsto,
-        (op.frota_necessaria_dfi - op.frota_ativa_real) AS deficit_real
-    FROM fato_previsao_ml ml
-    JOIN LATERAL (
-        SELECT o.status_linha, o.frota_necessaria_dfi, o.frota_ativa_real, o.timestamp_registro
-        FROM fato_linha_operacao o
-        WHERE o.linha_codigo = ml.linha_codigo 
-          AND o.sentido = ml.sentido
-          AND o.timestamp_registro >= ml.timestamp_alvo - INTERVAL '15 minutes'
-        ORDER BY ABS(EXTRACT(EPOCH FROM (o.timestamp_registro - ml.timestamp_alvo))) ASC
-        LIMIT 1
-    ) op ON true;
     """
     cur.execute(ddl_init)
 
-def persistir_rds(df_linhas, df_veiculos):
+def persistir_rds(df_linhas, df_veiculos, inicio_proc=None, duracao_segundos=None, sucesso=True, gtfs_ref=None):
     """
     Persiste diretamente no PostgreSQL RDS (busflowdb) sem intermediarios.
-    Tabelas: fato_linha_operacao e fato_veiculo_posicao
+    Tabelas: fato_linha_operacao, fato_veiculo_posicao e fato_auditoria_pipeline.
     Suporta driver psycopg2 ou pg8000 (nativo da layer AWSSDKPandas).
     """
     db_host = os.environ.get('DB_HOST')
@@ -472,7 +440,7 @@ def persistir_rds(df_linhas, df_veiculos):
                 user=db_user,
                 password=db_password,
                 port=db_port,
-                timeout=5
+                timeout=150
             )
             driver = 'pg8000'
         except ImportError:
@@ -481,9 +449,69 @@ def persistir_rds(df_linhas, df_veiculos):
 
     try:
         cur = conn.cursor()
-        
+
         # 0. Garantir criacao idempotente do schema, tabelas e views no primeiro ciclo
         inicializar_schema_se_necessario(cur)
+
+        def _bulk_insert(cur, sql_template, n_cols, rows, conflict_suffix='', chunk=500):
+            """Insere rows em lotes para pg8000 (sem execute_values nativo)."""
+            row_ph = '(' + ','.join(['%s'] * n_cols) + ')'
+            for i in range(0, len(rows), chunk):
+                part = rows[i:i+chunk]
+                sql = sql_template.format(
+                    placeholders=','.join([row_ph] * len(part))
+                ) + conflict_suffix
+                cur.execute(sql, [v for row in part for v in row])
+
+        # Populate dimensions before facts so their foreign keys can be satisfied.
+        if not df_linhas.empty:
+            linhas_dim = df_linhas[
+                ['linha_codigo', 'sentido', 'letreiro_origem', 'letreiro_destino']
+            ].drop_duplicates(subset=['linha_codigo', 'sentido'])
+            linhas_dim_rows = [
+                (str(row.linha_codigo), int(row.sentido), row.letreiro_origem, row.letreiro_destino)
+                for row in linhas_dim.itertuples(index=False)
+            ]
+            _bulk_insert(
+                cur,
+                'INSERT INTO dim_linha (linha_codigo,sentido,letreiro_origem,letreiro_destino) VALUES {placeholders}',
+                4, linhas_dim_rows,
+                ' ON CONFLICT (linha_codigo,sentido) DO UPDATE SET'
+                ' letreiro_origem=COALESCE(NULLIF(EXCLUDED.letreiro_origem,\'\'),dim_linha.letreiro_origem),'
+                ' letreiro_destino=COALESCE(NULLIF(EXCLUDED.letreiro_destino,\'\'),dim_linha.letreiro_destino)'
+            )
+
+            referencias_paradas = (gtfs_ref or {}).get('paradas_por_linha', {})
+            valores_paradas = []
+            for linha_codigo, sentido in linhas_dim[['linha_codigo', 'sentido']].itertuples(index=False, name=None):
+                referencia = referencias_paradas.get((str(linha_codigo), int(sentido)), {})
+                valores_paradas.extend(
+                    (
+                        str(linha_codigo), int(sentido), parada['ponto_parada_seq'],
+                        parada['nome_parada'], parada['latitude'], parada['longitude']
+                    )
+                    for parada in referencia.get('paradas', [])
+                )
+
+            if valores_paradas:
+                if driver == 'psycopg2':
+                    execute_values(cur,
+                        """INSERT INTO dim_linha_parada
+                           (linha_codigo,sentido,ponto_parada_seq,nome_parada,latitude,longitude)
+                           VALUES %s
+                           ON CONFLICT (linha_codigo,sentido,ponto_parada_seq) DO UPDATE SET
+                           nome_parada=EXCLUDED.nome_parada,
+                           latitude=EXCLUDED.latitude,longitude=EXCLUDED.longitude""",
+                        valores_paradas, page_size=500)
+                else:
+                    _bulk_insert(
+                        cur,
+                        'INSERT INTO dim_linha_parada (linha_codigo,sentido,ponto_parada_seq,nome_parada,latitude,longitude) VALUES {placeholders}',
+                        6, valores_paradas,
+                        ' ON CONFLICT (linha_codigo,sentido,ponto_parada_seq) DO UPDATE SET'
+                        ' nome_parada=EXCLUDED.nome_parada,'
+                        ' latitude=EXCLUDED.latitude,longitude=EXCLUDED.longitude'
+                    )
 
         # 1. Inserir Linhas Operacionais
         if not df_linhas.empty:
@@ -509,15 +537,11 @@ def persistir_rds(df_linhas, df_veiculos):
                 """
                 execute_values(cur, sql_linhas, valores_linhas, page_size=1000)
             else:
-                sql_linhas_pg = """
-                    INSERT INTO fato_linha_operacao (
-                        timestamp_registro, linha_codigo, sentido, frota_ativa_real,
-                        frota_necessaria_dfi, frota_planejada, headway_real_min,
-                        headway_planejado_min, aderencia_cronograma_pct, status_linha,
-                        iac_clima, gt_trafego, go_operacional
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """
-                cur.executemany(sql_linhas_pg, valores_linhas)
+                _bulk_insert(
+                    cur,
+                    'INSERT INTO fato_linha_operacao (timestamp_registro,linha_codigo,sentido,frota_ativa_real,frota_necessaria_dfi,frota_planejada,headway_real_min,headway_planejado_min,aderencia_cronograma_pct,status_linha,iac_clima,gt_trafego,go_operacional) VALUES {placeholders}',
+                    13, valores_linhas
+                )
 
         # 2. Inserir Veiculos Individuais
         if not df_veiculos.empty:
@@ -542,23 +566,42 @@ def persistir_rds(df_linhas, df_veiculos):
                 """
                 execute_values(cur, sql_veiculos, valores_veiculos, page_size=2000)
             else:
-                sql_veiculos_pg = """
-                    INSERT INTO fato_veiculo_posicao (
-                        timestamp_coleta, linha_codigo, sentido, prefixo_carro,
-                        ponto_parada_seq, latitude, longitude, status_carro,
-                        aderencia_individual, distancia_proximo_carro_km
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """
-                cur.executemany(sql_veiculos_pg, valores_veiculos)
+                _bulk_insert(
+                    cur,
+                    'INSERT INTO fato_veiculo_posicao (timestamp_coleta,linha_codigo,sentido,prefixo_carro,ponto_parada_seq,latitude,longitude,status_carro,aderencia_individual,distancia_proximo_carro_km) VALUES {placeholders}',
+                    10, valores_veiculos
+                )
+
+        # 3. Inserir Log de Auditoria Contínua (fato_auditoria_pipeline)
+        if inicio_proc:
+            duracao_efetiva = duracao_segundos if duracao_segundos is not None else 0.0
+            cumpre_sla = duracao_efetiva <= 60.0 and sucesso
+            sql_audit = """
+                INSERT INTO fato_auditoria_pipeline (
+                    componente, timestamp_inicio, timestamp_fim, duracao_segundos,
+                    linhas_processadas, status_execucao, cumpre_sla, mensagem_detalhe
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            cur.execute(sql_audit, (
+                'lambda-etl',
+                inicio_proc,
+                datetime.utcnow(),
+                round(duracao_efetiva, 2),
+                len(df_linhas),
+                'SUCESSO' if sucesso else 'FALHA',
+                cumpre_sla,
+                f"Executado via driver {driver}."
+            ))
 
         conn.commit()
         cur.close()
         conn.close()
-        print(f"Sucesso: {len(df_linhas)} linhas e {len(df_veiculos)} veiculos persistidos diretamente no RDS via {driver}.")
+        print(f"Sucesso: {len(df_linhas)} linhas, {len(df_veiculos)} veiculos e log de auditoria persistidos no RDS via {driver}.")
         return True
     except Exception as e:
         print(f"Aviso ao persistir no RDS (pipeline prossegue com S3): {e}")
         return False
+
 
 def lambda_handler(event, context):
     """
@@ -566,11 +609,12 @@ def lambda_handler(event, context):
     Processa o payload do RAW, cruza com inteligencia espacial HERE (cKDTree + IDW),
     calcula indices operacionais por linha e por veiculo, gravando no S3 TRUSTED e no RDS PostgreSQL.
     """
+    inicio_execucao = datetime.utcnow()
     try:
         bucket_raw = os.environ['BUCKET_RAW']
         bucket_trusted = os.environ['BUCKET_TRUSTED']
         topic_arn = os.environ.get('SNS_TOPIC_ARN')
-        
+
         # 1. Identificar arquivo no S3 RAW
         if 'Records' in event:
             key = urllib.parse.unquote_plus(event['Records'][0]['s3']['object']['key'])
@@ -578,32 +622,32 @@ def lambda_handler(event, context):
         else:
             key = 'realtime/ano=2026/mes=08/dia=22/raw_busflow_exemplo.json'
             bucket = bucket_raw
-            
+
         print(f"Iniciando processamento ETL para: s3://{bucket}/{key}")
-        
+
         # 2. Ler Payload RAW
         obj = s3.get_object(Bucket=bucket, Key=key)
         raw_data = json.loads(obj['Body'].read().decode('utf-8'))
-        
+
         sptrans_data = raw_data.get('sptrans', {})
         clima_data = raw_data.get('clima', {})
         trafego_data = raw_data.get('trafego', {})
-        
+
         hora_coleta = sptrans_data.get('hr', datetime.utcnow().strftime("%H:%M"))
         linhas = sptrans_data.get('l', [])
-        
+
         # 3. Construir Indexador Espacial HERE e Sub-indices Globais
         indexador_trafego = IndexadorEspacialTrafego(trafego_data)
         iac_score, clima_vars = calcular_indice_climatico(clima_data)
         hp_score, periodo_pico = classificar_horario_pico(hora_coleta)
         gtfs_ref = carregar_referencias_gtfs(bucket_raw)
-        
+
         # 4. Processar Linhas e Veiculos com Inteligencia Espacial
         registros_trusted = []
         registros_veiculos = []
         agora = datetime.utcnow()
         alertas_risco = []
-        
+
         for l in linhas:
             codigo_linha = l.get('c', 'DESCONHECIDO')
             linha_id = l.get('cl', 0)
@@ -612,29 +656,29 @@ def lambda_handler(event, context):
             letreiro_destino = l.get('lt1', '')
             frota_ativa_real = l.get('qv', 0)
             veiculos = l.get('vs', [])
-            
+
             # Cruzamento Espacial HERE por Linha (IDW no raio de 1 km)
             metricas_trafego = indexador_trafego.consultar_linha(veiculos)
             iiv_score = metricas_trafego['gt_score']
-            
+
             # Dimensionamento GTFS e Estimativas
             frota_planejada = max(1, int(frota_ativa_real * 1.1)) if frota_ativa_real > 0 else 5
             headway_planejado = gtfs_ref.get('headway_padrao_min', 8.0)
-            
+
             # Headway real estimado baseado na distribuicao de veiculos
             headway_real = round(max(3.0, (60.0 / frota_ativa_real)) if frota_ativa_real > 0 else 30.0, 1)
-            
+
             # Aderencia ao Cronograma (AC)
             ac_score = round(min(1.0, headway_planejado / headway_real), 3)
-            
+
             # Demanda de Frota Ideal (DFI) e Deficit
             fator_demanda = 1.0 + ((iac_score + iiv_score) / 200.0)
             frota_necessaria = math.ceil(frota_planejada * fator_demanda)
             deficit_operacional = max(0, frota_necessaria - frota_ativa_real)
-            
+
             # Risco Congestionamento Frota (DFI % de 0 a 100)
             dfi_score = round(min(100.0, (frota_necessaria / max(1, frota_ativa_real)) * 50.0), 2)
-            
+
             # Gargalo Operacional Geral (GO: 0.0 a 1.0)
             go_score = round(
                 (0.15 * hp_score) +
@@ -644,7 +688,7 @@ def lambda_handler(event, context):
                 (0.10 * (1.0 - ac_score)),
                 4
             )
-            
+
             # Classificacao de Risco (Matriz Calibrada de 4 Niveis)
             if go_score <= 0.45:
                 status_classificacao = "Estabilizado"
@@ -660,7 +704,7 @@ def lambda_handler(event, context):
                 status_classificacao = "Gargalo"
                 acao_recomendada = f"Disponibilizacao de {max(2, deficit_operacional)} onibus saindo do terminal."
                 alertas_risco.append((codigo_linha, status_classificacao, deficit_operacional))
-                
+
             # Montar Registro Tabular da Linha
             registro_linha = {
                 'timestamp_processamento': agora.isoformat(),
@@ -697,19 +741,19 @@ def lambda_handler(event, context):
                 'acao_recomendada': acao_recomendada
             }
             registros_trusted.append(registro_linha)
-            
+
             # Processar Carros Individuais para Circulacao da Frota (Paradas 1 a N)
             gtfs_linha = gtfs_ref.get('paradas_por_linha', {}).get((str(codigo_linha), int(sentido)))
             coords_tree = gtfs_linha.get('tree') if gtfs_linha else None
             seqs_list = gtfs_linha.get('seqs') if gtfs_linha else None
             total_paradas = gtfs_linha.get('total_paradas', 18) if gtfs_linha else 18
-            
+
             for idx, v in enumerate(veiculos):
                 p_raw = str(v.get('p', f"{idx+1}"))
                 prefixo_carro = f"Carro {p_raw[-2:] if len(p_raw) >= 2 else p_raw}"
                 lat_v = v.get('py')
                 lng_v = v.get('px')
-                
+
                 # Mapeamento Dinamico do Ponto de Parada (1 a N)
                 if coords_tree is not None and lat_v is not None and lng_v is not None:
                     y_v = lat_v * KM_PER_DEGREE_LAT
@@ -719,7 +763,7 @@ def lambda_handler(event, context):
                 else:
                     # Distribuicao sequencial proporcional dinamica se sem GTFS espacial
                     parada_seq = int((idx * (total_paradas / max(1, len(veiculos)))) % total_paradas) + 1
-                    
+
                 # Status individual do carro refletindo as condicoes do corredor
                 if status_classificacao == "Gargalo" and idx in [0, 1]:
                     status_carro = "Gargalo"
@@ -730,7 +774,7 @@ def lambda_handler(event, context):
                 else:
                     status_carro = "Estabilizado"
                     aderencia_carro = 0.90
-                    
+
                 registros_veiculos.append({
                     'timestamp_coleta': agora.isoformat(),
                     'linha_codigo': codigo_linha,
@@ -743,15 +787,15 @@ def lambda_handler(event, context):
                     'aderencia_individual': aderencia_carro,
                     'distancia_proximo_carro_km': round(max(0.2, (idx + 1) * 0.8), 2)
                 })
-            
+
         # 5. Salvar Datasets no Bucket TRUSTED (S3 Lakehouse)
         df_trusted = pd.DataFrame(registros_trusted)
         df_veiculos = pd.DataFrame(registros_veiculos)
-        
+
         timestamp_str = agora.strftime("%Y%m%d_%H%M%S")
         trusted_key_linhas = f"fato_operacao_frota/ano={agora.year}/mes={agora.month:02d}/dia={agora.day:02d}/fato_operacao_{timestamp_str}.csv"
         trusted_key_veiculos = f"fato_veiculo_posicao/ano={agora.year}/mes={agora.month:02d}/dia={agora.day:02d}/fato_veiculo_{timestamp_str}.csv"
-        
+
         csv_linhas_buf = io.StringIO()
         df_trusted.to_csv(csv_linhas_buf, index=False)
         s3.put_object(
@@ -760,7 +804,7 @@ def lambda_handler(event, context):
             Body=csv_linhas_buf.getvalue(),
             ContentType='text/csv'
         )
-        
+
         if not df_veiculos.empty:
             csv_veiculos_buf = io.StringIO()
             df_veiculos.to_csv(csv_veiculos_buf, index=False)
@@ -770,12 +814,20 @@ def lambda_handler(event, context):
                 Body=csv_veiculos_buf.getvalue(),
                 ContentType='text/csv'
             )
-            
+
         print(f"Sucesso: {len(df_trusted)} linhas e {len(df_veiculos)} veiculos gravados no S3 TRUSTED.")
-        
-        # 6. Persistir diretamente no RDS PostgreSQL (Fonte da Verdade)
-        persistir_rds(df_trusted, df_veiculos)
-        
+
+        # 6. Persistir diretamente no RDS PostgreSQL (Fonte da Verdade) com Auditoria
+        duracao_total = (datetime.utcnow() - inicio_execucao).total_seconds()
+        persistir_rds(
+            df_trusted,
+            df_veiculos,
+            inicio_proc=inicio_execucao,
+            duracao_segundos=duracao_total,
+            sucesso=True,
+            gtfs_ref=gtfs_ref
+        )
+
         # 7. Notificar via SNS se houver linhas criticas
         if alertas_risco and topic_arn:
             linhas_msg = "\n".join([f"- Linha {c}: Status {s}, Deficit {d} veiculos" for c, s, d in alertas_risco[:10]])
@@ -784,20 +836,26 @@ def lambda_handler(event, context):
                 sns.publish(TopicArn=topic_arn, Subject='[BusFlow] Alerta de Gargalo Operacional', Message=msg)
             except:
                 pass
-                
+
         return {
             'statusCode': 200,
             'body': json.dumps({
                 'mensagem': 'ETL executado com sucesso',
                 'linhas_processadas': len(df_trusted),
                 'veiculos_processados': len(df_veiculos),
+                'duracao_segundos': round(duracao_total, 2),
                 'trusted_key': trusted_key_linhas,
                 'alertas_gerados': len(alertas_risco)
             })
         }
-        
+
     except Exception as e:
-        print(f"Erro critico no ETL: {str(e)}")
+        duracao_erro = (datetime.utcnow() - inicio_execucao).total_seconds() if 'inicio_execucao' in locals() else 0.0
+        print(f"Erro critico no ETL ({duracao_erro:.2f}s): {str(e)}")
+        try:
+            persistir_rds(pd.DataFrame(), pd.DataFrame(), inicio_proc=inicio_execucao, duracao_segundos=duracao_erro, sucesso=False)
+        except:
+            pass
         if topic_arn:
             try:
                 sns.publish(
@@ -809,5 +867,5 @@ def lambda_handler(event, context):
                 pass
         return {
             'statusCode': 500,
-            'body': json.dumps({'erro': str(e)})
+            'body': json.dumps({'erro': str(e), 'duracao_segundos': round(duracao_erro, 2)})
         }

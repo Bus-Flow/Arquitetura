@@ -268,7 +268,7 @@ def carregar_referencias_gtfs(bucket_raw):
                 referencias['headway_padrao_min'] = headway_medio
                 
             if 'stops.txt' in z.namelist() and 'stop_times.txt' in z.namelist() and 'trips.txt' in z.namelist():
-                df_stops = pd.read_csv(z.open('stops.txt'), usecols=['stop_id', 'stop_lat', 'stop_lon'])
+                df_stops = pd.read_csv(z.open('stops.txt'), usecols=['stop_id', 'stop_name', 'stop_lat', 'stop_lon'])
                 df_st = pd.read_csv(z.open('stop_times.txt'), usecols=['trip_id', 'stop_id', 'stop_sequence'])
                 df_trips = pd.read_csv(z.open('trips.txt'), usecols=['trip_id', 'route_id', 'direction_id'])
                 
@@ -282,6 +282,15 @@ def carregar_referencias_gtfs(bucket_raw):
                         'coords': coords,
                         'seqs': seqs,
                         'total_paradas': len(seqs),
+                        'paradas': [
+                            {
+                                'ponto_parada_seq': int(row.stop_sequence),
+                                'nome_parada': str(row.stop_name) if pd.notna(row.stop_name) else None,
+                                'latitude': float(row.stop_lat),
+                                'longitude': float(row.stop_lon)
+                            }
+                            for row in group.itertuples(index=False)
+                        ],
                         'tree': cKDTree(coords * np.array([KM_PER_DEGREE_LAT, KM_PER_DEGREE_LNG])) if HAS_SCIPY and len(coords) > 0 else None
                     }
     except Exception as e:
@@ -377,63 +386,10 @@ def inicializar_schema_se_necessario(cur):
         sns_message_id VARCHAR(100)
     );
 
-    CREATE OR REPLACE VIEW v_grafana_status_linhas AS
-    SELECT DISTINCT ON (op.linha_codigo, op.sentido)
-        op.linha_codigo,
-        op.sentido,
-        op.status_linha,
-        op.frota_ativa_real,
-        op.frota_necessaria_dfi,
-        op.aderencia_cronograma_pct,
-        op.headway_real_min,
-        op.headway_planejado_min,
-        op.timestamp_registro
-    FROM fato_linha_operacao op
-    ORDER BY op.linha_codigo, op.sentido, op.timestamp_registro DESC;
-
-    CREATE OR REPLACE VIEW v_grafana_circulacao_carros AS
-    SELECT DISTINCT ON (p.linha_codigo, p.sentido, p.prefixo_carro)
-        p.linha_codigo,
-        p.sentido,
-        p.prefixo_carro,
-        p.ponto_parada_seq,
-        p.status_carro,
-        p.aderencia_individual,
-        p.timestamp_coleta
-    FROM fato_veiculo_posicao p
-    ORDER BY p.linha_codigo, p.sentido, p.prefixo_carro, p.timestamp_coleta DESC;
-
-    CREATE OR REPLACE VIEW v_grafana_validacao_ml AS
-    SELECT 
-        ml.id AS predicao_id,
-        ml.linha_codigo,
-        ml.horizonte_minutos,
-        ml.timestamp_previsao,
-        ml.timestamp_alvo,
-        ml.status_previsto,
-        op.status_linha AS status_real_confirmado,
-        CASE 
-            WHEN ml.status_previsto = op.status_linha THEN 'ACERTO (TP)'
-            WHEN ml.status_previsto IN ('Gargalo', 'Risco de Gargalo') AND op.status_linha = 'Estabilizado' THEN 'FALSO ALARME (FP)'
-            WHEN ml.status_previsto = 'Estabilizado' AND op.status_linha IN ('Gargalo', 'Risco de Gargalo') THEN 'OMISSAO (FN)'
-            ELSE 'OUTRO'
-        END AS resultado_validacao,
-        ml.deficit_veiculos AS deficit_previsto,
-        (op.frota_necessaria_dfi - op.frota_ativa_real) AS deficit_real
-    FROM fato_previsao_ml ml
-    JOIN LATERAL (
-        SELECT o.status_linha, o.frota_necessaria_dfi, o.frota_ativa_real, o.timestamp_registro
-        FROM fato_linha_operacao o
-        WHERE o.linha_codigo = ml.linha_codigo 
-          AND o.sentido = ml.sentido
-          AND o.timestamp_registro >= ml.timestamp_alvo - INTERVAL '15 minutes'
-        ORDER BY ABS(EXTRACT(EPOCH FROM (o.timestamp_registro - ml.timestamp_alvo))) ASC
-        LIMIT 1
-    ) op ON true;
     """
     cur.execute(ddl_init)
 
-def persistir_rds(df_linhas, df_veiculos, inicio_proc=None, duracao_segundos=None, sucesso=True):
+def persistir_rds(df_linhas, df_veiculos, inicio_proc=None, duracao_segundos=None, sucesso=True, gtfs_ref=None):
     """
     Persiste diretamente no PostgreSQL RDS (busflowdb) sem intermediarios.
     Tabelas: fato_linha_operacao, fato_veiculo_posicao e fato_auditoria_pipeline.
@@ -472,7 +428,7 @@ def persistir_rds(df_linhas, df_veiculos, inicio_proc=None, duracao_segundos=Non
                 user=db_user,
                 password=db_password,
                 port=db_port,
-                timeout=5
+                timeout=150
             )
             driver = 'pg8000'
         except ImportError:
@@ -481,6 +437,66 @@ def persistir_rds(df_linhas, df_veiculos, inicio_proc=None, duracao_segundos=Non
 
     try:
         cur = conn.cursor()
+
+        def _bulk_insert(cur, sql_template, n_cols, rows, conflict_suffix='', chunk=500):
+            """Insere rows em lotes para pg8000 (sem execute_values nativo)."""
+            row_ph = '(' + ','.join(['%s'] * n_cols) + ')'
+            for i in range(0, len(rows), chunk):
+                part = rows[i:i+chunk]
+                sql = sql_template.format(
+                    placeholders=','.join([row_ph] * len(part))
+                ) + conflict_suffix
+                cur.execute(sql, [v for row in part for v in row])
+
+        # Populate dimensions before facts so their foreign keys can be satisfied.
+        if not df_linhas.empty:
+            linhas_dim = df_linhas[
+                ['linha_codigo', 'sentido', 'letreiro_origem', 'letreiro_destino']
+            ].drop_duplicates(subset=['linha_codigo', 'sentido'])
+            linhas_dim_rows = [
+                (str(row.linha_codigo), int(row.sentido), row.letreiro_origem, row.letreiro_destino)
+                for row in linhas_dim.itertuples(index=False)
+            ]
+            _bulk_insert(
+                cur,
+                'INSERT INTO dim_linha (linha_codigo,sentido,letreiro_origem,letreiro_destino) VALUES {placeholders}',
+                4, linhas_dim_rows,
+                ' ON CONFLICT (linha_codigo,sentido) DO UPDATE SET'
+                ' letreiro_origem=COALESCE(NULLIF(EXCLUDED.letreiro_origem,\'\'),dim_linha.letreiro_origem),'
+                ' letreiro_destino=COALESCE(NULLIF(EXCLUDED.letreiro_destino,\'\'),dim_linha.letreiro_destino)'
+            )
+
+            referencias_paradas = (gtfs_ref or {}).get('paradas_por_linha', {})
+            valores_paradas = []
+            for linha_codigo, sentido in linhas_dim[['linha_codigo', 'sentido']].itertuples(index=False, name=None):
+                referencia = referencias_paradas.get((str(linha_codigo), int(sentido)), {})
+                valores_paradas.extend(
+                    (
+                        str(linha_codigo), int(sentido), parada['ponto_parada_seq'],
+                        parada['nome_parada'], parada['latitude'], parada['longitude']
+                    )
+                    for parada in referencia.get('paradas', [])
+                )
+
+            if valores_paradas:
+                if driver == 'psycopg2':
+                    execute_values(cur,
+                        """INSERT INTO dim_linha_parada
+                           (linha_codigo,sentido,ponto_parada_seq,nome_parada,latitude,longitude)
+                           VALUES %s
+                           ON CONFLICT (linha_codigo,sentido,ponto_parada_seq) DO UPDATE SET
+                           nome_parada=EXCLUDED.nome_parada,
+                           latitude=EXCLUDED.latitude,longitude=EXCLUDED.longitude""",
+                        valores_paradas, page_size=500)
+                else:
+                    _bulk_insert(
+                        cur,
+                        'INSERT INTO dim_linha_parada (linha_codigo,sentido,ponto_parada_seq,nome_parada,latitude,longitude) VALUES {placeholders}',
+                        6, valores_paradas,
+                        ' ON CONFLICT (linha_codigo,sentido,ponto_parada_seq) DO UPDATE SET'
+                        ' nome_parada=EXCLUDED.nome_parada,'
+                        ' latitude=EXCLUDED.latitude,longitude=EXCLUDED.longitude'
+                    )
 
         # 1. Inserir Linhas Operacionais
         if not df_linhas.empty:
@@ -506,15 +522,11 @@ def persistir_rds(df_linhas, df_veiculos, inicio_proc=None, duracao_segundos=Non
                 """
                 execute_values(cur, sql_linhas, valores_linhas, page_size=1000)
             else:
-                sql_linhas_pg = """
-                    INSERT INTO fato_linha_operacao (
-                        timestamp_registro, linha_codigo, sentido, frota_ativa_real,
-                        frota_necessaria_dfi, frota_planejada, headway_real_min,
-                        headway_planejado_min, aderencia_cronograma_pct, status_linha,
-                        iac_clima, gt_trafego, go_operacional
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """
-                cur.executemany(sql_linhas_pg, valores_linhas)
+                _bulk_insert(
+                    cur,
+                    'INSERT INTO fato_linha_operacao (timestamp_registro,linha_codigo,sentido,frota_ativa_real,frota_necessaria_dfi,frota_planejada,headway_real_min,headway_planejado_min,aderencia_cronograma_pct,status_linha,iac_clima,gt_trafego,go_operacional) VALUES {placeholders}',
+                    13, valores_linhas
+                )
 
         # 2. Inserir Veiculos Individuais
         if not df_veiculos.empty:
@@ -539,19 +551,16 @@ def persistir_rds(df_linhas, df_veiculos, inicio_proc=None, duracao_segundos=Non
                 """
                 execute_values(cur, sql_veiculos, valores_veiculos, page_size=2000)
             else:
-                sql_veiculos_pg = """
-                    INSERT INTO fato_veiculo_posicao (
-                        timestamp_coleta, linha_codigo, sentido, prefixo_carro,
-                        ponto_parada_seq, latitude, longitude, status_carro,
-                        aderencia_individual, distancia_proximo_carro_km
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """
-                cur.executemany(sql_veiculos_pg, valores_veiculos)
+                _bulk_insert(
+                    cur,
+                    'INSERT INTO fato_veiculo_posicao (timestamp_coleta,linha_codigo,sentido,prefixo_carro,ponto_parada_seq,latitude,longitude,status_carro,aderencia_individual,distancia_proximo_carro_km) VALUES {placeholders}',
+                    10, valores_veiculos
+                )
 
         # 3. Inserir Log de Auditoria Contínua (fato_auditoria_pipeline)
         if inicio_proc:
             duracao_efetiva = duracao_segundos if duracao_segundos is not None else 0.0
-            cumpre_sla = duracao_efetiva <= 60.0
+            cumpre_sla = duracao_efetiva <= 60.0 and sucesso
             sql_audit = """
                 INSERT INTO fato_auditoria_pipeline (
                     componente, timestamp_inicio, timestamp_fim, duracao_segundos,
@@ -795,7 +804,14 @@ def lambda_handler(event, context):
         
         # 6. Persistir diretamente no RDS PostgreSQL (Fonte da Verdade) com Auditoria
         duracao_total = (datetime.utcnow() - inicio_execucao).total_seconds()
-        persistir_rds(df_trusted, df_veiculos, inicio_proc=inicio_execucao, duracao_segundos=duracao_total, sucesso=True)
+        persistir_rds(
+            df_trusted,
+            df_veiculos,
+            inicio_proc=inicio_execucao,
+            duracao_segundos=duracao_total,
+            sucesso=True,
+            gtfs_ref=gtfs_ref
+        )
         
         # 7. Notificar via SNS se houver linhas criticas
         if alertas_risco and topic_arn:
