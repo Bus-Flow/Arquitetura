@@ -10,3 +10,9 @@ output "security_group_id" {
   description = "ID do Security Group da EC2 BusFlow"
   value       = aws_security_group.ec2_ssh.id
 }
+
+output "private_key_pem" {
+  description = "Chave SSH privada RSA (PEM) para acesso à EC2"
+  value       = tls_private_key.generated_key.private_key_pem
+  sensitive   = true
+}

@@ -1,19 +1,29 @@
 output "raw_name" {
-  value = aws_s3_bucket.raw.bucket
+  value      = local.raw_name
+  depends_on = [null_resource.s3_buckets]
 }
+
 output "raw_arn" {
-  value = aws_s3_bucket.raw.arn
+  value      = local.raw_arn
+  depends_on = [null_resource.s3_buckets]
 }
+
 output "raw_id" {
-  value = aws_s3_bucket.raw.id
+  value      = local.raw_name
+  depends_on = [null_resource.s3_buckets]
 }
 
 output "trusted_name" {
-  value = aws_s3_bucket.trusted.bucket
+  value      = local.trusted_name
+  depends_on = [null_resource.s3_buckets]
 }
+
 output "trusted_arn" {
-  value = aws_s3_bucket.trusted.arn
+  value      = local.trusted_arn
+  depends_on = [null_resource.s3_buckets]
 }
+
 output "trusted_id" {
-  value = aws_s3_bucket.trusted.id
+  value      = local.trusted_name
+  depends_on = [null_resource.s3_buckets]
 }

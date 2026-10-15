@@ -3,7 +3,7 @@ resource "random_id" "lambda_prefix" {
 }
 
 data "aws_iam_role" "lab_role" {
-  name = "LabRole"
+  name = var.lambda_iam_role_name
 }
 
 locals {

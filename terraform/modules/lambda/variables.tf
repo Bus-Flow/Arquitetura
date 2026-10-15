@@ -1,3 +1,9 @@
+variable "lambda_iam_role_name" {
+  description = "Nome do IAM Role assumido pelas Lambdas (LabRole em contas Academy; crie um role com permissões equivalentes em contas regulares)"
+  type        = string
+  default     = "LabRole"
+}
+
 variable "raw_name" {
   description = "Nome do bucket Raw"
   type        = string

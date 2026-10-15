@@ -8,6 +8,10 @@ terraform {
       source  = "hashicorp/tls"
       version = "~> 4.0"
     }
+    null = {
+      source  = "hashicorp/null"
+      version = "~> 3.0"
+    }
   }
   required_version = ">= 1.2.0"
 }
@@ -40,6 +44,7 @@ module "rds" {
 
 module "lambda" {
   source                                 = "./modules/lambda"
+  lambda_iam_role_name                   = var.lambda_iam_role_name
   email_list                             = var.email_list
   raw_arn                                = module.s3.raw_arn
   raw_name                               = module.s3.raw_name
@@ -128,4 +133,10 @@ output "s3_trusted_bucket" {
 output "sns_topic_arn" {
   description = "SNS Topic ARN"
   value       = module.sns.topic_arn
+}
+
+output "ec2_private_key" {
+  description = "Chave SSH privada (PEM) — usar apenas para setup inicial"
+  value       = module.ec2.private_key_pem
+  sensitive   = true
 }

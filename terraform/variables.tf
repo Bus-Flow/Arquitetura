@@ -40,9 +40,15 @@ variable "ec2_subnet_id" {
 }
 
 variable "ec2_iam_instance_profile_name" {
-  description = "Nome do perfil de instância IAM já fornecido pelo Learner Lab"
+  description = "Nome do perfil de instância IAM já fornecido pelo Learner Lab (ou equivalente em conta regular)"
   type        = string
   default     = "LabInstanceProfile"
+}
+
+variable "lambda_iam_role_name" {
+  description = "Nome do IAM Role assumido pelas Lambdas (LabRole em contas Academy; substitua pelo role criado em contas regulares)"
+  type        = string
+  default     = "LabRole"
 }
 
 variable "ec2_instance_type" {
@@ -132,21 +138,25 @@ variable "sptrans_password" {
 # Configurações de Agendamento (EventBridge Triggers)
 # ==============================================================================
 variable "schedule_realtime_off_peak_expressions" {
-  description = "Expressões EventBridge para ingestão em tempo real fora do pico"
+  description = "Expressões EventBridge para ingestão em tempo real fora do pico (horários em UTC = Brasília + 3h)"
   type        = map(string)
 
   default = {
-    morning   = "cron(0 9-11 ? * * *)"
-    afternoon = "cron(0/20 12-16 ? * * *)"
-    evening   = "cron(0 22-23 ? * * *)"
-    late      = "cron(0 0-1 ? * * *)"
+    # Brasília 09h-11h = UTC 12h-14h
+    morning   = "cron(0 12-14 ? * * *)"
+    # Brasília 12h-16h a cada 20min = UTC 15h-19h
+    afternoon = "cron(0/20 15-19 ? * * *)"
+    # Brasília 22h-23h = UTC 01h-02h
+    evening   = "cron(0 1-2 ? * * *)"
+    # Brasília 00h-01h = UTC 03h-04h
+    late      = "cron(0 3-4 ? * * *)"
   }
 }
 
 variable "schedule_realtime_peak_expression" {
-  description = "Expressão EventBridge para ingestão em tempo real no pico, das 17h às 19h, a cada 10 minutos"
+  description = "Expressão EventBridge para ingestão no pico das 17h-20h Brasília (UTC 20h-23h), a cada 10 minutos"
   type        = string
-  default     = "cron(0/10 17-19 ? * * *)"
+  default     = "cron(0/10 20-23 ? * * *)"
 }
 
 variable "schedule_gtfs_expression" {
