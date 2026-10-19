@@ -91,8 +91,13 @@ module "ec2" {
 # Outputs
 
 output "ec2_web_app_ip" {
-  description = "IP público da EC2 Web App"
+  description = "IP público da EC2 Web App / Machine Learning (busflow-rf-ec2)"
   value       = module.ec2.ec2_web_app_ip
+}
+
+output "ec2_grafana_ip" {
+  description = "IP público da EC2 Grafana (busflow-grafana-ec2)"
+  value       = module.ec2.ec2_grafana_ip
 }
 
 output "rds_endpoint" {
