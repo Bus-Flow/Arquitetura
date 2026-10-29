@@ -84,25 +84,30 @@ CREATE INDEX IF NOT EXISTS idx_veiculo_carro ON fato_veiculo_posicao (prefixo_ca
 
 CREATE TABLE IF NOT EXISTS fato_previsao_ml (
     id BIGSERIAL PRIMARY KEY,
-    timestamp_previsao TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP, -- Momento da inferência (ex: 18:00)
+    timestamp_previsao TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP, -- Momento da inferência
     linha_codigo VARCHAR(20) NOT NULL,
     sentido INT NOT NULL,
-    horizonte_minutos INT NOT NULL,           -- 10 ou 40 minutos
-    timestamp_alvo TIMESTAMP WITH TIME ZONE NOT NULL, -- Quando deve ocorrer (ex: 18:10 ou 18:40)
+    horizonte_minutos INT NOT NULL,           -- Janela projetada (ex: 30 minutos)
+    timestamp_alvo TIMESTAMP WITH TIME ZONE NOT NULL, -- Quando a previsão se concretiza (t + 30 min)
     
-    -- Diagnóstico Preditivo
+    -- Diagnóstico Preditivo e Índices de Gargalo Operacional (GO)
     status_previsto VARCHAR(30) NOT NULL,     -- 'Estabilizado', 'Risco de Gargalo', 'Gargalo'
-    deficit_veiculos INT NOT NULL,            -- "2"
-    probabilidade_gargalo FLOAT NOT NULL,     -- 0.0 a 1.0
+    go_atual DOUBLE PRECISION,                -- Índice GO observado no instante da análise (t)
+    go_previsto_30min DOUBLE PRECISION,       -- Índice GO estimado para 30 minutos à frente (t+30)
+    threshold_go DOUBLE PRECISION,            -- Limiar preventivo aplicado (ex: 0.3875)
+    timestamp_referencia_operacional TIMESTAMPTZ, -- Instante operacional t utilizado
+    tipo_execucao VARCHAR(20),                -- 'simulacao', 'operacional'
+    deficit_veiculos INT,                     -- Aceita NULL (o modelo Random Forest não estima frotas extras)
+    probabilidade_gargalo FLOAT,              -- Aceita NULL (o modelo prevê índice contínuo GO, não probabilidade)
     
-    -- Textos Formatados Diretamente para os Cards do Grafana
-    acao_necessaria VARCHAR(255) NOT NULL,    -- "Necessário: Disponibilização de 2 onibus saindo do terminal."
-    justificativa VARCHAR(255) NOT NULL,      -- "Justificativa: Atraso devido a gargalo entre as paradas 12 e 17."
-    parada_inicio_gargalo INT,                -- 12
-    parada_fim_gargalo INT,                   -- 17
+    -- Textos Formatados Diretamente para os Cards do Grafana e CCO
+    acao_necessaria VARCHAR(255) NOT NULL,    
+    justificativa VARCHAR(255) NOT NULL,      
+    parada_inicio_gargalo INT,                
+    parada_fim_gargalo INT,                   
     
     alerta_ativo BOOLEAN DEFAULT TRUE,
-    versao_modelo VARCHAR(50) DEFAULT 'xgboost-busflow-v1',
+    versao_modelo VARCHAR(50) DEFAULT 'busflow_rf_residual_v1',
     FOREIGN KEY (linha_codigo, sentido) REFERENCES dim_linha(linha_codigo, sentido)
 );
 
@@ -114,12 +119,13 @@ CREATE INDEX IF NOT EXISTS idx_ml_ativos ON fato_previsao_ml (alerta_ativo, time
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS fato_alerta (
     id BIGSERIAL PRIMARY KEY,
+    previsao_ml_id BIGINT REFERENCES fato_previsao_ml(id), -- Vinculação relacional direta com a predição da IA
     timestamp_disparo TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     linha_codigo VARCHAR(20) NOT NULL,
     sentido INT NOT NULL,
     titulo VARCHAR(100) NOT NULL,             -- "Gargalo Crítico"
     status_criticidade VARCHAR(30) NOT NULL,  -- 'Gargalo', 'Risco'
-    deficit_sugerido INT NOT NULL,
+    deficit_sugerido INT,                     -- Aceita NULL (ML atual não quantifica ônibus extras)
     mensagem_acao TEXT NOT NULL,
     justificativa TEXT NOT NULL,
     enviado_sns BOOLEAN DEFAULT FALSE,
@@ -128,6 +134,7 @@ CREATE TABLE IF NOT EXISTS fato_alerta (
 );
 
 CREATE INDEX IF NOT EXISTS idx_alerta_historico ON fato_alerta (timestamp_disparo DESC);
+CREATE INDEX IF NOT EXISTS idx_alerta_previsao ON fato_alerta (previsao_ml_id);
 
 -- ============================================================================
 -- 6. VIEWS OTIMIZADAS PARA O GRAFANA (QUERIES PRONTAS)

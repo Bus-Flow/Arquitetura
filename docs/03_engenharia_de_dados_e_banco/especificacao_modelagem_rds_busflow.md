@@ -28,7 +28,8 @@ erDiagram
     dim_linha ||--o{ fato_linha_operacao : "possui metricas de operacao"
     dim_linha ||--o{ fato_veiculo_posicao : "possui veiculos ativos"
     dim_linha ||--o{ fato_previsao_ml : "recebe previsoes preditivas"
-    dim_linha ||--o{ fato_alerta : "gera alertas operacionais"
+    dim_linha ||--o{ fato_alerta : "registra alertas por linha"
+    fato_previsao_ml ||--o{ fato_alerta : "origina alerta (previsao_ml_id)"
 
     dim_linha {
         varchar linha_codigo PK
@@ -83,11 +84,16 @@ erDiagram
         timestamp timestamp_previsao
         varchar linha_codigo FK
         int sentido FK
-        int horizonte_minutos "10 ou 40"
+        int horizonte_minutos "30 min"
         timestamp timestamp_alvo
         varchar status_previsto
-        int deficit_veiculos
-        float probabilidade_gargalo
+        float go_atual
+        float go_previsto_30min
+        float threshold_go
+        timestamp timestamp_referencia_operacional
+        varchar tipo_execucao
+        int deficit_veiculos "NULLable"
+        float probabilidade_gargalo "NULLable"
         varchar acao_necessaria
         varchar justificativa
         int parada_inicio_gargalo
@@ -98,12 +104,13 @@ erDiagram
 
     fato_alerta {
         bigserial id PK
+        bigint previsao_ml_id FK
         timestamp timestamp_disparo
         varchar linha_codigo FK
         int sentido FK
         varchar titulo
         varchar status_criticidade
-        int deficit_sugerido
+        int deficit_sugerido "NULLable"
         text mensagem_acao
         text justificativa
         boolean enviado_sns
@@ -164,35 +171,41 @@ Armazena a posicao e aderencia de cada veiculo individual ativo na linha a cada 
 * `distancia_proximo_carro_km` (FLOAT): Espacamento em quilometros para o carro a frente (deteccao de comboio).
 
 ### 3.5 Tabela `fato_previsao_ml`
-Destino padronizado para onde o modelo preditivo (SageMaker / XGBoost) grava suas inferencias.
-* `id` (BIGSERIAL, PK): Identificador da inferencia preditiva.
-* `timestamp_previsao` (TIMESTAMP WITH TIME ZONE): Momento exato em que o modelo executou a inferencia.
+Destino padronizado para onde o modelo preditivo (Random Forest na EC2) grava suas inferências.
+* `id` (BIGSERIAL, PK): Identificador da inferência preditiva.
+* `timestamp_previsao` (TIMESTAMP WITH TIME ZONE): Momento exato em que o modelo executou a inferência.
 * `linha_codigo` (VARCHAR(20), FK): Linha avaliada.
 * `sentido` (INT, FK): Sentido da linha.
-* `horizonte_minutos` (INT): Janela temporal projetada (10 ou 40 minutos).
-* `timestamp_alvo` (TIMESTAMP WITH TIME ZONE): Momento exato para o qual a previsao e valida ($timestamp\_previsao + horizonte$).
-* `status_previsto` (VARCHAR(30)): Cenario projetado pela IA (`Estabilizado`, `Risco de Gargalo`, `Gargalo`).
-* `deficit_veiculos` (INT): Quantidade recomendada de veiculos adicionais a despachar do terminal/garagem.
-* `probabilidade_gargalo` (FLOAT): Confianca probabilistica da classificacao ($0.0$ a $1.0$).
-* `acao_necessaria` (VARCHAR(255)): Texto pronto para o card no CCO (ex: `Disponibilizacao de 2 onibus saindo do terminal.`).
+* `horizonte_minutos` (INT): Janela temporal projetada (ex: 30 minutos).
+* `timestamp_alvo` (TIMESTAMP WITH TIME ZONE): Momento exato para o qual a previsão é válida ($timestamp\_referencia + 30\text{ min}$).
+* `status_previsto` (VARCHAR(30)): Cenário projetado pela IA (`Estabilizado`, `Risco de Gargalo`, `Gargalo`).
+* `go_atual` (DOUBLE PRECISION): Índice GO observado no instante da análise ($t$).
+* `go_previsto_30min` (DOUBLE PRECISION): Índice GO estimado pelo Random Forest para $t+30$.
+* `threshold_go` (DOUBLE PRECISION): Limiar de decisão preventiva aplicado (ex: 0.3875).
+* `timestamp_referencia_operacional` (TIMESTAMP WITH TIME ZONE): Instante operacional $t$ dos dados de entrada.
+* `tipo_execucao` (VARCHAR(20)): Diferenciação entre execução `simulacao` (backtesting) e `operacional` (tempo real).
+* `deficit_veiculos` (INT, NULLable): Quantidade estimada de veículos (aceita NULL no modelo atual).
+* `probabilidade_gargalo` (FLOAT, NULLable): Probabilidade calibrada (aceita NULL, modelo atual prevê score contínuo GO).
+* `acao_necessaria` (VARCHAR(255)): Texto pronto para o card no CCO (ex: `Disponibilização de 2 ônibus saindo do terminal.`).
 * `justificativa` (VARCHAR(255)): Texto explicativo indicando o trecho (ex: `Atraso devido a gargalo entre as paradas 12 e 17.`).
-* `parada_inicio_gargalo` (INT): Sequencial da parada inicial do trecho de lentidao.
-* `parada_fim_gargalo` (INT): Sequencial da parada final do trecho de lentidao.
-* `alerta_ativo` (BOOLEAN): Flag para controle de exibicao nos cards vigentes do Grafana.
-* `versao_modelo` (VARCHAR(50)): Identificador do artefato de treinamento para rastreabilidade de MLOps.
+* `parada_inicio_gargalo` (INT): Sequencial da parada inicial do trecho de lentidão.
+* `parada_fim_gargalo` (INT): Sequencial da parada final do trecho de lentidão.
+* `alerta_ativo` (BOOLEAN): Flag para controle de exibição nos cards vigentes do Grafana.
+* `versao_modelo` (VARCHAR(50)): Identificador do artefato de treinamento (`busflow_rf_residual_v1`).
 
 ### 3.6 Tabela `fato_alerta`
-Historico dos alertas disparados para a tela e enviados aos canais do AWS SNS.
+Histórico dos alertas disparados para a tela e enviados aos canais do AWS SNS, com rastreabilidade direta à predição que o motivou.
 * `id` (BIGSERIAL, PK): Identificador do alerta.
-* `timestamp_disparo` (TIMESTAMP WITH TIME ZONE): Instante de emissao.
+* `previsao_ml_id` (BIGINT, FK): Chave estrangeira para `fato_previsao_ml(id)` garantindo rastreabilidade do gatilho analítico.
+* `timestamp_disparo` (TIMESTAMP WITH TIME ZONE): Instante de emissão.
 * `linha_codigo` (VARCHAR(20), FK): Linha impactada.
-* `sentido` (INT, FK): Sentido da operacao.
-* `titulo` (VARCHAR(100)): Cabecalho da ocorrencia (ex: `Gargalo Critico Detectado`).
-* `status_criticidade` (VARCHAR(30)): Nivel de severidade.
-* `deficit_sugerido` (INT): Veiculos extras recomendados.
-* `mensagem_acao` (TEXT): Conteudo instrucional de despacho.
-* `justificativa` (TEXT): Evidencia operacional que motivou o alerta.
-* `enviado_sns` (BOOLEAN): Indicador de publicacao com sucesso no topico SNS.
+* `sentido` (INT, FK): Sentido da operação.
+* `titulo` (VARCHAR(100)): Cabeçalho da ocorrência (ex: `Gargalo Crítico Detectado`).
+* `status_criticidade` (VARCHAR(30)): Nível de severidade (`Gargalo`, `Risco`).
+* `deficit_sugerido` (INT, NULLable): Veículos extras recomendados (aceita NULL).
+* `mensagem_acao` (TEXT): Conteúdo instrucional de despacho.
+* `justificativa` (TEXT): Evidência operacional que motivou o alerta.
+* `enviado_sns` (BOOLEAN): Indicador de publicação com sucesso no tópico SNS.
 * `sns_message_id` (VARCHAR(100)): Identificador da mensagem retornado pela AWS.
 
 ---
