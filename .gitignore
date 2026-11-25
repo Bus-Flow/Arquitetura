@@ -12,6 +12,11 @@ terraform.tfvars
 *.pub
 *.key
 
+# Backups cifrados e dumps de banco (nunca versionar)
+*.enc
+*.dump
+tfplan
+
 # ==========================================
 # Credenciais e Ambientes
 # ==========================================

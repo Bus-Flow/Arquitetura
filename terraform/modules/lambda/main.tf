@@ -119,6 +119,7 @@ resource "aws_lambda_permission" "allow_s3" {
 }
 
 resource "aws_s3_bucket_notification" "bucket_trigger" {
+  count  = var.enable_s3_etl_trigger ? 1 : 0
   bucket = var.raw_name
 
   lambda_function {
@@ -137,6 +138,7 @@ resource "aws_cloudwatch_event_rule" "schedule_realtime_off_peak" {
   name                = "busflow-schedule-realtime-off-peak-${each.key}"
   description         = "Dispara a ingestao em tempo real fora do pico: 09h-11h com rotina normal, 12h-16h a cada 20 minutos, 22h-23h e 00h-01h com rotina normal (Brasilia)"
   schedule_expression = each.value
+  state               = var.enable_schedules ? "ENABLED" : "DISABLED"
 }
 
 resource "aws_cloudwatch_event_target" "target_realtime_off_peak" {
@@ -157,8 +159,9 @@ resource "aws_lambda_permission" "allow_eventbridge_realtime_off_peak" {
 
 resource "aws_cloudwatch_event_rule" "schedule_realtime_peak" {
   name                = "busflow-schedule-realtime-peak"
-  description         = "Dispara a ingestao de tempo real a cada 10 minutos das 17h as 19h (Brasilia)"
+  description         = "Dispara a ingestao de tempo real a cada 10 minutos das 17h as 21h50 (Brasilia)"
   schedule_expression = var.schedule_realtime_peak_expression
+  state               = var.enable_schedules ? "ENABLED" : "DISABLED"
 }
 
 resource "aws_cloudwatch_event_target" "target_realtime_peak" {
@@ -180,6 +183,7 @@ resource "aws_cloudwatch_event_rule" "schedule_gtfs" {
   name                = "busflow-schedule-gtfs"
   description         = "Dispara a checagem e ingestao do GTFS da SPTrans a cada 12 horas"
   schedule_expression = var.schedule_gtfs_expression
+  state               = var.enable_schedules ? "ENABLED" : "DISABLED"
 }
 
 resource "aws_cloudwatch_event_target" "target_gtfs" {

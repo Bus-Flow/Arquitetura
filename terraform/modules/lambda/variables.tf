@@ -85,6 +85,16 @@ variable "schedule_realtime_peak_expression" {
   type        = string
 }
 
+variable "enable_schedules" {
+  type    = bool
+  default = false
+}
+
+variable "enable_s3_etl_trigger" {
+  type    = bool
+  default = false
+}
+
 variable "schedule_gtfs_expression" {
   description = "Expressão de agendamento EventBridge GTFS"
   type        = string

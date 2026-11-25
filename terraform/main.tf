@@ -61,7 +61,9 @@ module "lambda" {
   schedule_realtime_off_peak_expressions = var.schedule_realtime_off_peak_expressions
   schedule_realtime_peak_expression      = var.schedule_realtime_peak_expression
   schedule_gtfs_expression               = var.schedule_gtfs_expression
-  db_host                                = module.rds.rds_endpoint
+  enable_schedules                       = var.enable_schedules
+  enable_s3_etl_trigger                  = var.enable_s3_etl_trigger
+  db_host                               = module.rds.rds_endpoint
   db_name                                = module.rds.rds_database_name
   db_user                                = "postgres"
   db_password                            = var.rds_master_password

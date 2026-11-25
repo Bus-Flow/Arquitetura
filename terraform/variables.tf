@@ -154,9 +154,21 @@ variable "schedule_realtime_off_peak_expressions" {
 }
 
 variable "schedule_realtime_peak_expression" {
-  description = "Expressão EventBridge para ingestão no pico das 17h-20h Brasília (UTC 20h-23h), a cada 10 minutos"
+  description = "Expressão EventBridge para ingestão no pico das 17h-21h50 Brasília (UTC 20h-00h50), a cada 10 minutos"
   type        = string
-  default     = "cron(0/10 20-23 ? * * *)"
+  default     = "cron(0/10 0,20-23 ? * * *)"
+}
+
+variable "enable_schedules" {
+  description = "Liga as regras EventBridge de ingestão; manter false até validar a restauração"
+  type        = bool
+  default     = false
+}
+
+variable "enable_s3_etl_trigger" {
+  description = "Liga a notificação S3 RAW -> Lambda ETL; manter false durante a carga do histórico"
+  type        = bool
+  default     = false
 }
 
 variable "schedule_gtfs_expression" {
